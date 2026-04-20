@@ -94,7 +94,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <Header title="Dashboard" subtitle="CFO Cockpit — real-time business overview" />
+      <Header title="TEST CHANGE" subtitle="CFO Cockpit — real-time business overview" />
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
         {/* KPI Row */}
