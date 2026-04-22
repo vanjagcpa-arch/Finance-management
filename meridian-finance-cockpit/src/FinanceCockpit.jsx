@@ -335,7 +335,7 @@ const SEED_DATA = {
         id: 'base',
         name: 'Base Case',
         description: 'Most likely forecast based on current pipeline',
-        color: '#808080',
+        color: C.text2,
         overrides: {}, // No overrides = use default driver values
       },
       {
@@ -1093,26 +1093,49 @@ export default function FinanceCockpit() {
 // SIDEBAR NAVIGATION
 // ══════════════════════════════════════════════════════════════
 function Sidebar({ activeView, setActiveView, onReset, canUndo, canRedo, onUndo, onRedo, viewport }) {
-  const items = [
-    { id: 'dashboard', label: 'Dash', longLabel: 'Dashboard', num: '1', icon: 'D' },
-    { id: 'pl', label: 'P&L', longLabel: 'Profit & Loss', num: '2', icon: 'P' },
-    { id: 'balance', label: 'BS', longLabel: 'Balance Sheet', num: '3', icon: 'B' },
-    { id: 'forecast', label: 'F\u2019cast', longLabel: 'Forecast', num: '4', icon: 'F' },
-    { id: 'risk', label: 'Risk', longLabel: 'Risk & Scenarios', num: '5', icon: 'R' },
-    { id: 'actions', label: 'Tasks', longLabel: 'Actions', num: '6', icon: 'T' },
-    { id: 'data', label: 'Data', longLabel: 'Data Manager', num: '7', icon: 'M' },
+  const groups = [
+    {
+      label: 'Overview',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', shortcut: '1' },
+      ],
+    },
+    {
+      label: 'Financials',
+      items: [
+        { id: 'pl', label: 'Profit & Loss', shortcut: '2' },
+        { id: 'balance', label: 'Balance Sheet', shortcut: '3' },
+        { id: 'forecast', label: 'Forecast', shortcut: '4' },
+      ],
+    },
+    {
+      label: 'Manage',
+      items: [
+        { id: 'risk', label: 'Risk & Scenarios', shortcut: '5' },
+        { id: 'actions', label: 'Actions', shortcut: '6' },
+      ],
+    },
+    {
+      label: 'Data',
+      items: [
+        { id: 'data', label: 'Data Manager', shortcut: '7' },
+      ],
+    },
   ];
+
+  const allItems = groups.flatMap(g => g.items);
 
   if (viewport && viewport.isMobile) {
     return (
       <div style={styles.bottomNav}>
-        {items.map((item) => {
+        {allItems.map((item) => {
           const isActive = activeView === item.id;
           const itemStyle = isActive ? { ...styles.bottomNavItem, ...styles.bottomNavItemActive } : styles.bottomNavItem;
+          const shortLabel = item.label.split(' ')[0].slice(0, 4);
           return (
             <div key={item.id} onClick={() => setActiveView(item.id)} style={itemStyle}>
-              <span style={{ fontSize: '11pt', fontFamily: 'Lora, serif', fontWeight: 700, lineHeight: 1, marginBottom: 3 }}>{item.icon}</span>
-              <span style={{ fontSize: '6.5pt', fontWeight: 600 }}>{item.label}</span>
+              <span style={{ fontSize: '9pt', fontFamily: 'Lora, serif', fontWeight: 700, lineHeight: 1, marginBottom: 3 }}>{item.shortcut}</span>
+              <span style={{ fontSize: '6pt', fontWeight: 500 }}>{shortLabel}</span>
             </div>
           );
         })}
@@ -1123,33 +1146,51 @@ function Sidebar({ activeView, setActiveView, onReset, canUndo, canRedo, onUndo,
   return (
     <div style={styles.sidebar}>
       <div style={styles.sidebarLogo}>
-        <div style={{ fontFamily: 'Lora, serif', fontSize: '14pt', fontWeight: 700, lineHeight: 1 }}>M</div>
-        <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#808080', marginTop: 4 }}>Cockpit</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: '6px', background: 'rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Lora, serif', fontSize: '13pt', fontWeight: 700, color: '#fff', flexShrink: 0 }}>M</div>
+          <div>
+            <div style={{ fontSize: '9pt', fontWeight: 600, color: '#fff', letterSpacing: '-0.01em' }}>Meridian</div>
+            <div style={{ fontSize: '6.5pt', color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>Finance Cockpit</div>
+          </div>
+        </div>
       </div>
 
-      {items.map((item) => (
-        <div
-          key={item.id}
-          onClick={() => setActiveView(item.id)}
-          style={{ ...styles.navItem, ...(activeView === item.id ? styles.navItemActive : {}) }}
-          title={item.longLabel}
-        >
-          <span style={styles.navNum}>{item.num}</span>
-          <span style={styles.navLabel}>{item.longLabel}</span>
+      {groups.map((group, gi) => (
+        <div key={group.label}>
+          {gi > 0 && <div style={styles.navDivider} />}
+          <div style={styles.navGroupLabel}>{group.label}</div>
+          {group.items.map((item) => {
+            const isActive = activeView === item.id;
+            return (
+              <div
+                key={item.id}
+                onClick={() => setActiveView(item.id)}
+                style={{ ...styles.navItem, ...(isActive ? styles.navItemActive : {}) }}
+                title={item.label}
+              >
+                <span style={styles.navLabel}>{item.label}</span>
+                <span style={{ fontSize: '6.5pt', fontFamily: 'monospace', color: isActive ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', padding: '1px 4px', flexShrink: 0 }}>{item.shortcut}</span>
+              </div>
+            );
+          })}
         </div>
       ))}
 
       <div style={{ flex: 1 }} />
 
-      <div onClick={canUndo ? onUndo : undefined} style={{ ...styles.navAction, opacity: canUndo ? 1 : 0.3, cursor: canUndo ? 'pointer' : 'default' }} title="Undo (\u2318Z)">
-        <span style={{ fontSize: '14pt', fontWeight: 600 }}>\u21B6</span>
-      </div>
-      <div onClick={canRedo ? onRedo : undefined} style={{ ...styles.navAction, opacity: canRedo ? 1 : 0.3, cursor: canRedo ? 'pointer' : 'default' }} title="Redo">
-        <span style={{ fontSize: '14pt', fontWeight: 600 }}>\u21B7</span>
-      </div>
+      <div style={styles.navDivider} />
 
-      <div onClick={onReset} style={styles.navReset} title="Reset all data">
-        <span style={{ fontSize: '14pt' }}>\u21BA</span>
+      <div onClick={canUndo ? onUndo : undefined} style={{ ...styles.navAction, opacity: canUndo ? 1 : 0.35, cursor: canUndo ? 'pointer' : 'default' }} title="Undo">
+        <span style={{ fontSize: '12pt' }}>↶</span>
+        <span style={{ fontSize: '8pt' }}>Undo</span>
+      </div>
+      <div onClick={canRedo ? onRedo : undefined} style={{ ...styles.navAction, opacity: canRedo ? 1 : 0.35, cursor: canRedo ? 'pointer' : 'default' }} title="Redo">
+        <span style={{ fontSize: '12pt' }}>↷</span>
+        <span style={{ fontSize: '8pt' }}>Redo</span>
+      </div>
+      <div onClick={onReset} style={{ ...styles.navReset, marginBottom: 8 }} title="Reset all data">
+        <span style={{ fontSize: '12pt' }}>↺</span>
+        <span style={{ fontSize: '8pt' }}>Reset</span>
       </div>
     </div>
   );
@@ -1165,8 +1206,8 @@ function Header({ data, save, viewport }) {
 
   if (viewport && viewport.isMobile) {
     return (
-      <div style={{ borderBottom: '2px solid #000', paddingBottom: 10, marginBottom: 14 }}>
-        <div style={{ fontSize: '6pt', textTransform: 'uppercase', letterSpacing: '0.14em', color: '#808080', marginBottom: 2 }}>Finance Cockpit</div>
+      <div style={{ borderBottom: `2px solid ${C.text}`, paddingBottom: 10, marginBottom: 14 }}>
+        <div style={{ fontSize: '6pt', textTransform: 'uppercase', letterSpacing: '0.14em', color: C.text2, marginBottom: 2 }}>Finance Cockpit</div>
         <h1 style={{ fontFamily: 'Lora, serif', fontSize: '14pt', fontWeight: 700, lineHeight: 1.15, marginBottom: 4 }}>
           <EditableValue type="text" value={data.meta.org} onChange={(v) => updateMeta('org', v)} />
         </h1>
@@ -1174,7 +1215,7 @@ function Header({ data, save, viewport }) {
           <div style={{ fontFamily: 'Lora, serif', fontSize: '9pt', fontWeight: 600 }}>
             <EditableValue type="text" value={data.meta.period} onChange={(v) => updateMeta('period', v)} />
           </div>
-          <div style={{ fontSize: '6.5pt', color: '#808080', fontStyle: 'italic' }}>Live</div>
+          <div style={{ fontSize: '6.5pt', color: C.text2, fontStyle: 'italic' }}>Live</div>
         </div>
       </div>
     );
@@ -1182,20 +1223,24 @@ function Header({ data, save, viewport }) {
 
   return (
     <div style={styles.header}>
-      <div>
-        <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.14em', color: '#808080', marginBottom: 4 }}>
-          Finance Cockpit
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div>
+          <h1 style={{ fontFamily: 'Lora, serif', fontSize: '18pt', fontWeight: 700, lineHeight: 1.1, color: C.text, letterSpacing: '-0.02em' }}>
+            <EditableValue type="text" value={data.meta.org} onChange={(v) => updateMeta('org', v)} />
+          </h1>
+          <div style={{ fontSize: '7.5pt', color: C.text2, marginTop: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, display: 'inline-block' }} />
+              Live · Auto-saved
+            </span>
+          </div>
         </div>
-        <h1 style={{ fontFamily: 'Lora, serif', fontSize: '20pt', fontWeight: 700, lineHeight: 1.15 }}>
-          <EditableValue type="text" value={data.meta.org} onChange={(v) => updateMeta('org', v)} />
-        </h1>
       </div>
-      <div style={{ textAlign: 'right', fontSize: '8pt', color: '#404040', lineHeight: 1.9 }}>
-        <div style={{ fontFamily: 'Lora, serif', fontSize: '12pt', fontWeight: 600, color: '#000' }}>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontFamily: 'Lora, serif', fontSize: '13pt', fontWeight: 600, color: C.text, lineHeight: 1.1 }}>
           <EditableValue type="text" value={data.meta.period} onChange={(v) => updateMeta('period', v)} />
         </div>
-        <div>Live · Auto-saved</div>
-        <div style={{ color: '#808080', fontStyle: 'italic' }}>Last edit syncs locally</div>
+        <div style={{ fontSize: '7pt', color: C.text3, marginTop: 4 }}>Reporting period</div>
       </div>
     </div>
   );
@@ -1380,7 +1425,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
             id: newScenarioId,
             name: scenarioName,
             description: 'Saved from dashboard what-if sliders',
-            color: '#404040',
+            color: C.text2,
             overrides: newOverrides,
           },
         ],
@@ -1454,7 +1499,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
                 return (
                   <div key={m.month} onClick={() => { setViewMonthIdx(i); setMonthDropdownOpen(false); }} style={itemStyle}>
                     <span>{monthLabel(m.month)}</span>
-                    <span style={{ fontSize: '7.5pt', color: '#808080' }}>{fmt(m.revenue)}</span>
+                    <span style={{ fontSize: '7.5pt', color: C.text2 }}>{fmt(m.revenue)}</span>
                   </div>
                 );
               })}
@@ -1462,7 +1507,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
           )}
         </div>
         {!isLatest && (
-          <div style={{ fontSize: '7.5pt', color: '#808080', fontStyle: 'italic' }}>
+          <div style={{ fontSize: '7.5pt', color: C.text2, fontStyle: 'italic' }}>
             Historical view. <span onClick={() => setViewMonthIdx(data.monthly.length - 1)} style={{ color: '#000', cursor: 'pointer', textDecoration: 'underline', fontWeight: 600 }}>Back to latest</span>
           </div>
         )}
@@ -1475,20 +1520,20 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
 
       {/* RAG STRIP */}
       <div style={styles.ragStrip}>
-        {ragItems.map((item, i) => (
-          <div key={i} style={{ ...styles.ragItem, ...(item.status === 'g' ? { background: '#F2F2F2' } : item.status === 'a' ? { background: '#EBEBEB' } : { background: '#fff' }) }}>
-            <div style={{
-              width: 9, height: 9, borderRadius: '50%',
-              background: item.status === 'g' ? '#000' : item.status === 'a' ? '#808080' : '#fff',
-              border: item.status === 'r' ? '2px solid #000' : 'none',
-              flexShrink: 0,
-            }} />
-            <div>
-              <div style={{ fontSize: '7.5pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{item.label}</div>
-              <div style={{ fontSize: '7pt', color: '#404040', marginTop: 2 }}>{item.detail}</div>
+        {ragItems.map((item, i) => {
+          const dotColor = item.status === 'g' ? C.green : item.status === 'a' ? C.amber : C.red;
+          const bg = item.status === 'g' ? C.greenBg : item.status === 'a' ? C.amberBg : C.redBg;
+          const borderAccent = item.status === 'g' ? C.green : item.status === 'a' ? C.amber : C.red;
+          return (
+            <div key={i} style={{ ...styles.ragItem, background: bg, borderLeft: `3px solid ${borderAccent}` }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: '7.5pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: C.text }}>{item.label}</div>
+                <div style={{ fontSize: '7pt', color: C.text2, marginTop: 2 }}>{item.detail}</div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* AI INSIGHT */}
@@ -1497,7 +1542,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
         <div style={{ flex: 1 }}>
           <div style={styles.aiInsightLabel}>AI Insight · Auto-generated from live data</div>
           {insightLoading ? (
-            <div style={{ color: '#808080', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ color: C.text2, fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Spinner /> Analyzing your data...
             </div>
           ) : (
@@ -1562,11 +1607,12 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
 
       {/* GOALS TRACKER */}
       <div style={{ marginTop: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 4, borderBottom: '1px solid #D9D9D9' }}>
-          <h3 style={{ fontFamily: 'Lora, serif', fontSize: '10pt', fontWeight: 600, margin: 0 }}>
-            Annual Goals — FY {goals.year}
-          </h3>
-          <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <h3 style={{ fontFamily: 'Lora, serif', fontSize: '10.5pt', fontWeight: 700, margin: 0, color: C.text }}>Annual Goals</h3>
+            <span style={{ fontSize: '7.5pt', color: C.text2 }}>FY {goals.year}</span>
+          </div>
+          <div style={{ fontSize: '7pt', color: C.text3, background: '#ece9e3', padding: '3px 8px', borderRadius: '4px' }}>
             {(paceRatio * 100).toFixed(0)}% of year elapsed
           </div>
         </div>
@@ -1587,7 +1633,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
 
       {/* WHAT-IF SIMULATOR */}
       <div style={{ marginTop: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 4, borderBottom: '1px solid #D9D9D9' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 4, borderBottom: `1px solid ${C.border}` }}>
           <h3 style={{ fontFamily: 'Lora, serif', fontSize: '10pt', fontWeight: 600, margin: 0 }}>
             What-If Simulator
             {hasWhatIfChanges && <span style={{ marginLeft: 10, fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#fff', background: '#000', padding: '2px 8px', fontWeight: 700 }}>Live</span>}
@@ -1598,7 +1644,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
         </div>
         {whatIfOpen && (
           <div style={styles.whatIfPanel}>
-            <div style={{ fontSize: '7.5pt', color: '#404040', marginBottom: 12, fontStyle: 'italic' }}>
+            <div style={{ fontSize: '7.5pt', color: C.text2, marginBottom: 12, fontStyle: 'italic' }}>
               Drag sliders to test how changes to key drivers would affect next month's forecast. Overrides merge with the active <strong>{activeScenario ? activeScenario.name : 'Base'}</strong> scenario. Reset or save as a new scenario.
             </div>
 
@@ -1638,7 +1684,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
 
             {/* Impact preview */}
             <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', fontWeight: 600, marginBottom: 6 }}>
+              <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, fontWeight: 600, marginBottom: 6 }}>
                 Impact on {monthLabel(data.forecastModel.periods[0])} Forecast
               </div>
               <div style={styles.whatIfImpactRow}>
@@ -1652,7 +1698,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
                   const pctChange = imp.base !== 0 ? (diff / Math.abs(imp.base)) * 100 : 0;
                   return (
                     <div key={imp.label} style={styles.whatIfImpactCell}>
-                      <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: '#808080', letterSpacing: '0.06em' }}>{imp.label}</div>
+                      <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>{imp.label}</div>
                       <div style={{ fontFamily: 'Lora, serif', fontSize: '12pt', fontWeight: 700, marginTop: 2 }}>{fmt(imp.mod, 1)}</div>
                       {hasWhatIfChanges && diff !== 0 && (
                         <div style={{ fontSize: '7pt', color: diff >= 0 ? '#000' : '#404040', fontWeight: 600, marginTop: 2 }}>
@@ -1676,11 +1722,11 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
 
       {/* xP&A FORECAST OUTLOOK — Linked live from forecast model */}
       <div style={{ marginTop: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 4, borderBottom: '1px solid #D9D9D9' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 4, borderBottom: `1px solid ${C.border}` }}>
           <h3 style={{ fontFamily: 'Lora, serif', fontSize: '10pt', fontWeight: 600, margin: 0 }}>
             Forecast Outlook — Next 3 Months
           </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2 }}>
             <span>Scenario:</span>
             <span style={{
               padding: '3px 8px',
@@ -1709,13 +1755,13 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
           </div>
 
           {/* Revenue */}
-          <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 600, borderTop: '1px solid #D9D9D9' }}>Total Revenue</div>
+          <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 600, borderTop: `1px solid ${C.border}` }}>Total Revenue</div>
           {forecastSummary.revenue.map((v, i) => (
-            <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: '1px solid #D9D9D9', borderLeft: '1px solid #E8E8E8' }}>
+            <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: `1px solid ${C.border}`, borderLeft: '1px solid #E8E8E8' }}>
               {fmt(v)}
             </div>
           ))}
-          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#F2F2F2', borderTop: '1px solid #D9D9D9' }}>
+          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#F2F2F2', borderTop: `1px solid ${C.border}` }}>
             {fmt(forecastSummary.totalRev)}
           </div>
 
@@ -1756,7 +1802,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
           </div>
         </div>
 
-        <div style={{ marginTop: 8, fontSize: '7.5pt', color: '#808080', fontStyle: 'italic', textAlign: 'right' }}>
+        <div style={{ marginTop: 8, fontSize: '7.5pt', color: C.text2, fontStyle: 'italic', textAlign: 'right' }}>
           Live from your xP&A model · Any change to drivers flows here automatically
         </div>
       </div>
@@ -1774,7 +1820,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
       {explainItem && (
         <Modal title={'Why is ' + explainItem.name + ' ' + (explainItem.status === 'r' ? 'red' : 'amber') + '?'} onClose={() => setExplainItem(null)}>
           {explainLoading ? (
-            <div style={{ color: '#808080', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 8, padding: 10 }}>
+            <div style={{ color: C.text2, fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 8, padding: 10 }}>
               <Spinner /> Analyzing variance...
             </div>
           ) : (
@@ -1787,7 +1833,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
       {digestOpen && (
         <Modal title="Weekly Digest" onClose={() => setDigestOpen(false)}>
           {digestLoading ? (
-            <div style={{ color: '#808080', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 8, padding: 20 }}>
+            <div style={{ color: C.text2, fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 8, padding: 20 }}>
               <Spinner /> Composing digest from your data...
             </div>
           ) : (
@@ -1805,9 +1851,9 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
       {/* GOAL EDIT MODAL */}
       {editingGoal && (
         <Modal title={'Edit Target: ' + editingGoal.label} onClose={() => setEditingGoal(null)}>
-          <div style={{ fontSize: '8.5pt', color: '#404040', marginBottom: 10 }}>{editingGoal.description}</div>
+          <div style={{ fontSize: '8.5pt', color: C.text2, marginBottom: 10 }}>{editingGoal.description}</div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', fontWeight: 600, display: 'block', marginBottom: 4 }}>
+            <label style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, fontWeight: 600, display: 'block', marginBottom: 4 }}>
               Target ({editingGoal.unit === '$' ? 'USD' : editingGoal.unit})
             </label>
             <input
@@ -1817,7 +1863,7 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
               style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #000', fontSize: '11pt', fontFamily: 'Lora, serif', fontWeight: 700 }}
             />
           </div>
-          <div style={{ fontSize: '7.5pt', color: '#808080', fontStyle: 'italic', marginBottom: 14 }}>
+          <div style={{ fontSize: '7.5pt', color: C.text2, fontStyle: 'italic', marginBottom: 14 }}>
             Current actual: {editingGoal.unit === '$' ? fmt(goalActuals[editingGoal.metric] || 0, 1) : editingGoal.unit === 'months' ? (goalActuals[editingGoal.metric] || 0).toFixed(1) + ' mo' : fmtNum(goalActuals[editingGoal.metric] || 0)}
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -1831,10 +1877,14 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
 }
 
 function KpiCard({ label, value, sub, onClick, trend, status, onExplain }) {
-  const topBorder = status === 'r' ? '3px solid #000' : status === 'a' ? '3px solid #808080' : 'none';
+  const borderColor = status === 'r' ? C.red : status === 'a' ? C.amber : status === 'g' ? C.green : 'transparent';
+  const dotColor = status === 'r' ? C.red : status === 'a' ? C.amber : status === 'g' ? C.green : null;
   return (
-    <div style={{ ...styles.kpiCard, borderTop: topBorder, position: 'relative' }} onClick={onClick}>
-      <div style={styles.kpiLabel}>{label}</div>
+    <div style={{ ...styles.kpiCard, borderTop: `3px solid ${borderColor}`, position: 'relative' }} onClick={onClick}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 2 }}>
+        <div style={styles.kpiLabel}>{label}</div>
+        {dotColor && <div style={{ width: 6, height: 6, borderRadius: '50%', background: dotColor, flexShrink: 0, marginTop: 2 }} />}
+      </div>
       <div style={styles.kpiValue}>{value}</div>
       <div style={styles.kpiSub}>{sub}</div>
       {trend && trend.length > 1 && (
@@ -1845,7 +1895,7 @@ function KpiCard({ label, value, sub, onClick, trend, status, onExplain }) {
       {(status === 'r' || status === 'a') && onExplain && (
         <button
           onClick={(e) => { e.stopPropagation(); onExplain(); }}
-          style={styles.explainBtn}
+          style={{ ...styles.explainBtn, background: status === 'r' ? C.redBg : C.amberBg, color: status === 'r' ? C.red : C.amber, borderColor: status === 'r' ? C.redBorder : C.amberBorder }}
         >
           Why?
         </button>
@@ -1860,7 +1910,7 @@ function QuickStat({ label, value, delta, suffix = '' }) {
       <div style={styles.qsLabel}>{label}</div>
       <div style={styles.qsValue}>{value}</div>
       {delta !== undefined && (
-        <div style={{ fontSize: '7pt', color: delta >= 0 ? '#000' : '#404040', marginTop: 2 }}>
+        <div style={{ fontSize: '7pt', color: delta >= 0 ? C.green : C.red, marginTop: 2 }}>
           {delta >= 0 ? '↑' : '↓'} {Math.abs(delta)}{suffix} vs prior
         </div>
       )}
@@ -1886,13 +1936,14 @@ function Sparkline({ values, width, height }) {
   const first = values[0];
   const last = values[values.length - 1];
   const pct = first !== 0 ? ((last - first) / Math.abs(first)) * 100 : 0;
+  const trendColor = pct >= 0 ? C.green : C.red;
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
       <svg width={w} height={h} style={{ display: 'block', overflow: 'visible' }}>
-        <polyline fill="none" stroke="#000" strokeWidth="1.5" points={pts} />
-        <circle cx={lastPart[0]} cy={lastPart[1]} r="2.5" fill="#000" />
+        <polyline fill="none" stroke={trendColor} strokeWidth="1.5" points={pts} strokeOpacity="0.7" />
+        <circle cx={lastPart[0]} cy={lastPart[1]} r="2.5" fill={trendColor} />
       </svg>
-      <div style={{ fontSize: '7pt', color: pct >= 0 ? '#000' : '#808080', fontWeight: 600, whiteSpace: 'nowrap' }}>
+      <div style={{ fontSize: '7pt', color: trendColor, fontWeight: 600, whiteSpace: 'nowrap' }}>
         {pct >= 0 ? '↑' : '↓'} {Math.abs(pct).toFixed(0)}%
       </div>
     </div>
@@ -1902,29 +1953,30 @@ function Sparkline({ values, width, height }) {
 // ══════════════════════════════════════════════════════════════
 // GOAL TRACKING COMPONENTS
 // ══════════════════════════════════════════════════════════════
-function GoalRing({ progress, size, strokeWidth }) {
+function GoalRing({ progress, size, strokeWidth, strokeColor }) {
   const s = size || 60;
   const sw = strokeWidth || 6;
   const radius = (s - sw) / 2;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.max(0, Math.min(1, progress));
   const dashOffset = circumference * (1 - clamped);
+  const color = strokeColor || C.text;
   return (
     <svg width={s} height={s} style={{ display: 'block' }}>
-      <circle cx={s / 2} cy={s / 2} r={radius} fill="none" stroke="#E8E8E8" strokeWidth={sw} />
+      <circle cx={s / 2} cy={s / 2} r={radius} fill="none" stroke={C.border} strokeWidth={sw} />
       <circle
         cx={s / 2}
         cy={s / 2}
         r={radius}
         fill="none"
-        stroke="#000"
+        stroke={color}
         strokeWidth={sw}
         strokeDasharray={circumference}
         strokeDashoffset={dashOffset}
         strokeLinecap="round"
         transform={'rotate(-90 ' + (s / 2) + ' ' + (s / 2) + ')'}
       />
-      <text x={s / 2} y={s / 2} textAnchor="middle" dominantBaseline="central" fontFamily="Lora, serif" fontSize={s * 0.24} fontWeight="700" fill="#000">
+      <text x={s / 2} y={s / 2} textAnchor="middle" dominantBaseline="central" fontFamily="Lora, serif" fontSize={s * 0.24} fontWeight="700" fill={color}>
         {Math.round(clamped * 100)}%
       </text>
     </svg>
@@ -1945,31 +1997,32 @@ function GoalCard({ goal, actual, target, paceRatio, isMaintain, onEdit }) {
     paceStatus = onPaceRatio >= 1 ? 'on' : onPaceRatio >= 0.9 ? 'watch' : 'off';
     paceLabel = onPaceRatio >= 1 ? 'On pace' : onPaceRatio >= 0.9 ? 'Slightly behind' : 'Behind pace';
   }
-  const paceColor = paceStatus === 'on' ? '#000' : paceStatus === 'watch' ? '#808080' : '#404040';
+  const paceColor = paceStatus === 'on' ? C.green : paceStatus === 'watch' ? C.amber : C.red;
+  const ringColor = paceStatus === 'on' ? C.green : paceStatus === 'watch' ? C.amber : C.red;
   return (
     <div style={styles.goalCard}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#808080', fontWeight: 600 }}>{goal.label}</div>
-          <div style={{ fontSize: '7pt', color: '#808080', fontStyle: 'italic', marginTop: 2 }}>{goal.description}</div>
+          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text3, fontWeight: 600 }}>{goal.label}</div>
+          <div style={{ fontSize: '7pt', color: C.text3, fontStyle: 'italic', marginTop: 2 }}>{goal.description}</div>
         </div>
         {onEdit && (
           <button onClick={onEdit} style={styles.goalEditBtn} title="Edit target">edit</button>
         )}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <GoalRing progress={clamped} size={64} strokeWidth={7} />
+        <GoalRing progress={clamped} size={64} strokeWidth={7} strokeColor={ringColor} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
             <div style={{ fontFamily: 'Lora, serif', fontSize: '14pt', fontWeight: 700, lineHeight: 1 }}>
               {goal.unit === '$' ? fmt(actual, 1) : goal.unit === 'months' ? actual.toFixed(1) + ' mo' : fmtNum(actual)}
             </div>
-            <div style={{ fontSize: '7pt', color: '#808080' }}>
+            <div style={{ fontSize: '7pt', color: C.text2 }}>
               / {goal.unit === '$' ? fmt(target, 1) : goal.unit === 'months' ? target + ' mo' : fmtNum(target)}
             </div>
           </div>
           <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: paceColor, border: paceStatus === 'off' ? '2px solid #000' : 'none' }} />
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: paceColor, flexShrink: 0 }} />
             <div style={{ fontSize: '7pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: paceColor }}>{paceLabel}</div>
           </div>
         </div>
@@ -2129,19 +2182,19 @@ function CategoryAccountsDrilldown({ bucket, accounts, data, save, currentMonthS
       {/* Summary header */}
       <div style={styles.accountsSummaryRow}>
         <div>
-          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#808080', fontWeight: 700 }}>This Month Total</div>
+          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2, fontWeight: 700 }}>This Month Total</div>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '16pt', fontWeight: 700, lineHeight: 1, marginTop: 2 }}>{fmt(currentTotal)}</div>
         </div>
         <div>
-          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#808080' }}>Committed</div>
+          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2 }}>Committed</div>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700, marginTop: 2 }}>{fmt(committedTotal)}</div>
         </div>
         <div>
-          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#808080' }}>Planned</div>
+          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2 }}>Planned</div>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700, marginTop: 2 }}>{fmt(plannedTotal)}</div>
         </div>
         <div>
-          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#808080' }}>Lines</div>
+          <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2 }}>Lines</div>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700, marginTop: 2 }}>{(accounts || []).length}</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
@@ -2177,7 +2230,7 @@ function CategoryAccountsDrilldown({ bucket, accounts, data, save, currentMonthS
       {viewMode === 'list' && (
         <div style={{ marginTop: 12 }}>
           {(accounts || []).length === 0 ? (
-            <div style={{ padding: 20, textAlign: 'center', background: '#F8F8F8', border: '1px dashed #D9D9D9', color: '#808080', fontSize: '8.5pt' }}>
+            <div style={{ padding: 20, textAlign: 'center', background: '#f5f4ef', border: '1px dashed #D9D9D9', color: C.text2, fontSize: '8.5pt' }}>
               No accounts yet. Add your first line to start tracking at this level.
             </div>
           ) : (
@@ -2227,7 +2280,7 @@ function CategoryAccountsDrilldown({ bucket, accounts, data, save, currentMonthS
                   <tr key={a.id}>
                     <td style={{ ...styles.td, position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>
                       <div style={{ fontWeight: 600 }}>{a.name}</div>
-                      <div style={{ fontSize: '6.5pt', color: '#808080', marginTop: 2 }}>
+                      <div style={{ fontSize: '6.5pt', color: C.text2, marginTop: 2 }}>
                         {a.committed ? 'Committed' : 'Planned'} · {a.notes ? a.notes.slice(0, 40) : ''}
                       </div>
                     </td>
@@ -2267,12 +2320,12 @@ function AccountRow({ account, bucket, currentMonthStr, onUpdate, onDelete }) {
           <EditableValue type="text" value={account.name} onChange={(v) => onUpdate('name', v)} />
         </div>
         {account.notes !== undefined && (
-          <div style={{ fontSize: '6.5pt', color: '#808080', fontStyle: 'italic', marginTop: 2 }}>
+          <div style={{ fontSize: '6.5pt', color: C.text2, fontStyle: 'italic', marginTop: 2 }}>
             <EditableValue type="text" value={account.notes || ''} onChange={(v) => onUpdate('notes', v)} />
           </div>
         )}
       </div>
-      <div style={{ textAlign: 'center', fontSize: '7pt', color: '#808080' }}>—</div>
+      <div style={{ textAlign: 'center', fontSize: '7pt', color: C.text2 }}>—</div>
       <div style={{ textAlign: 'right' }}>
         <EditableValue
           value={account.monthlyValues ? (account.monthlyValues[currentMonthStr] || 0) : 0}
@@ -2286,8 +2339,8 @@ function AccountRow({ account, bucket, currentMonthStr, onUpdate, onDelete }) {
       <div style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'Lora, serif' }}>
         {fmt(monthlyImpact, 1)}
       </div>
-      <div style={{ textAlign: 'center', fontSize: '7pt', color: '#404040' }}>
-        <div style={{ fontStyle: 'italic', color: '#808080' }}>Edit in Data tab</div>
+      <div style={{ textAlign: 'center', fontSize: '7pt', color: C.text2 }}>
+        <div style={{ fontStyle: 'italic', color: C.text2 }}>Edit in Data tab</div>
       </div>
       <div style={{ textAlign: 'center' }}>
         <button
@@ -2350,22 +2403,22 @@ function ProfitLoss({ data, save, currentMonth, netIncome, budgetNet, forecastCo
         const projNet = projRev - projCost;
         const revChange = projRev - currentMonth.revenue;
         return (
-          <div style={{ background: '#F2F2F2', border: '1px solid #D9D9D9', borderLeft: '3px solid #000', padding: '10px 14px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: 20, alignItems: 'center' }}>
-            <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#808080', fontWeight: 700 }}>Next Month Forecast</div>
-            <div style={{ fontSize: '8pt', color: '#404040' }}>
+          <div style={{ background: '#F2F2F2', border: `1px solid ${C.border}`, borderLeft: '3px solid #000', padding: '10px 14px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: 20, alignItems: 'center' }}>
+            <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2, fontWeight: 700 }}>Next Month Forecast</div>
+            <div style={{ fontSize: '8pt', color: C.text2 }}>
               {monthLabel(nextPeriod)} · <strong>{activeScenario?.name || 'Base'}</strong> scenario · Computed from driver model
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: '#808080', letterSpacing: '0.06em' }}>Revenue</div>
+              <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>Revenue</div>
               <div style={{ fontFamily: 'Lora, serif', fontSize: '12pt', fontWeight: 700 }}>{fmt(projRev)}</div>
               <div style={{ fontSize: '6.5pt', color: revChange >= 0 ? '#000' : '#808080' }}>{revChange >= 0 ? '↑' : '↓'} {fmt(Math.abs(revChange))} vs actual</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: '#808080', letterSpacing: '0.06em' }}>Costs</div>
+              <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>Costs</div>
               <div style={{ fontFamily: 'Lora, serif', fontSize: '12pt', fontWeight: 700 }}>{fmt(projCost)}</div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: '#808080', letterSpacing: '0.06em' }}>Net Income</div>
+              <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>Net Income</div>
               <div style={{ fontFamily: 'Lora, serif', fontSize: '12pt', fontWeight: 700, color: projNet >= 0 ? '#000' : '#404040' }}>{fmt(projNet)}</div>
             </div>
           </div>
@@ -2574,7 +2627,7 @@ function RevenueCard({ title, actual, budget, onActualChange, onBudgetChange, ex
         </div>
       ))}
       {hasAccounts && !expanded && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #D9D9D9', fontSize: '7pt', color: '#808080', fontStyle: 'italic' }}>
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #D9D9D9', fontSize: '7pt', color: C.text2, fontStyle: 'italic' }}>
           From accounts: {fmt(accountsTotal)} this month · {accounts.length} line{accounts.length === 1 ? '' : 's'}
           {' '}<button
             onClick={() => onActualChange(Math.round(accountsTotal))}
@@ -2655,7 +2708,7 @@ function CostBar({ cat, data, save, currentMonthStr, forecastPeriods, onUpdate, 
         <br />
         <strong>Action:</strong> <EditableValue type="text" value={cat.action} onChange={(v) => onUpdate('action', v)} />
         {hasAccounts && (
-          <div style={{ marginTop: 6, fontSize: '7pt', color: '#808080', fontStyle: 'italic' }}>
+          <div style={{ marginTop: 6, fontSize: '7pt', color: C.text2, fontStyle: 'italic' }}>
             From accounts: {fmt(accountsTotal)} this month {Math.abs(accountsTotal - cat.actual) > cat.actual * 0.05 && <span style={{ color: '#000', fontWeight: 700 }}> · {Math.abs(accountsTotal - cat.actual) > 0 ? ((accountsTotal - cat.actual >= 0 ? '+' : '−') + fmt(Math.abs(accountsTotal - cat.actual))) : ''} vs manual entry</span>}
             {' '}<button
               onClick={() => onUpdate('actual', Math.round(accountsTotal))}
@@ -2794,17 +2847,17 @@ function BalanceSheet({ data, save, workingCapital, totalAR, totalAssets, totalL
         const maxCash = Math.max(...cashPath, data.balanceSheet.cash);
         const minMonth = periods[cashPath.indexOf(minCash)] || periods[0];
         return (
-          <div style={{ marginTop: 14, background: '#FAFAFA', border: '1px solid #D9D9D9', padding: 14 }}>
+          <div style={{ marginTop: 14, background: C.surface, border: `1px solid ${C.border}`, padding: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
               <div>
-                <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#808080', fontWeight: 700 }}>xP&A Cash Trajectory</div>
-                <div style={{ fontSize: '8pt', color: '#404040', marginTop: 2 }}>Scenario: <strong>{activeScenario?.name}</strong> · Min cash {fmt(minCash, 1)} in {monthLabel(minMonth)}</div>
+                <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2, fontWeight: 700 }}>xP&A Cash Trajectory</div>
+                <div style={{ fontSize: '8pt', color: C.text2, marginTop: 2 }}>Scenario: <strong>{activeScenario?.name}</strong> · Min cash {fmt(minCash, 1)} in {monthLabel(minMonth)}</div>
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${periods.length}, 1fr)`, gap: 1, background: '#D9D9D9', border: '1px solid #808080' }}>
               {periods.map((p, i) => (
                 <div key={p} style={{ background: '#fff', padding: '10px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: '#808080', letterSpacing: '0.06em' }}>{monthLabel(p)}</div>
+                  <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>{monthLabel(p)}</div>
                   <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700, marginTop: 3 }}>{fmt(cashPath[i], 1)}</div>
                   <div style={{ fontSize: '6.5pt', color: runwayPath[i] < 2 ? '#000' : '#404040', marginTop: 2, fontWeight: runwayPath[i] < 2 ? 700 : 400 }}>
                     {runwayPath[i].toFixed(1)} mo runway
@@ -3010,15 +3063,15 @@ function PnlForecastTab({ data, save }) {
     ];
 
     return (
-      <tr style={{ background: '#F8F8F8' }}>
+      <tr style={{ background: '#f5f4ef' }}>
         <td colSpan={2 + visibleMonths.length + 1} style={{ ...styles.td, padding: 14 }}>
-          <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', fontWeight: 700, marginBottom: 8 }}>
+          <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, fontWeight: 700, marginBottom: 8 }}>
             Driver-Based Planning — {account.name}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, alignItems: 'end' }}>
             {driverOptions.map((opt) => (
               <div key={opt.key}>
-                <label style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#808080', fontWeight: 600, display: 'block', marginBottom: 2 }}>
+                <label style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.06em', color: C.text2, fontWeight: 600, display: 'block', marginBottom: 2 }}>
                   {opt.label}
                 </label>
                 <input
@@ -3031,12 +3084,12 @@ function PnlForecastTab({ data, save }) {
               </div>
             ))}
             <div>
-              <label style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#808080', fontWeight: 600, display: 'block', marginBottom: 2 }}>Notes</label>
+              <label style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.06em', color: C.text2, fontWeight: 600, display: 'block', marginBottom: 2 }}>Notes</label>
               <input
                 type="text"
                 value={account.notes || ''}
                 onChange={(e) => updateAccountField(groupKey, headerKey, account.id, 'notes', e.target.value)}
-                style={{ width: '100%', padding: '6px 8px', border: '1px solid #D9D9D9', fontSize: '8.5pt' }}
+                style={{ width: '100%', padding: '6px 8px', border: `1px solid ${C.border}`, fontSize: '8.5pt' }}
                 placeholder="e.g. backfill from Dec 1"
               />
             </div>
@@ -3050,7 +3103,7 @@ function PnlForecastTab({ data, save }) {
               </button>
             </div>
           </div>
-          <div style={{ marginTop: 10, fontSize: '7pt', color: '#808080', fontStyle: 'italic' }}>
+          <div style={{ marginTop: 10, fontSize: '7pt', color: C.text2, fontStyle: 'italic' }}>
             Formulas: {headerKey === 'employee' && 'headcount × avgSalary = monthly cost'}{headerKey === 'membership' && 'count × ARPU = monthly revenue'}{headerKey === 'sponsorship' && 'count × fee = monthly revenue'}{headerKey === 'events' && 'attendees × avgTicket = monthly revenue'}
           </div>
         </td>
@@ -3086,7 +3139,7 @@ function PnlForecastTab({ data, save }) {
               <tr style={{ background: '#F2F2F2', cursor: 'pointer' }} onClick={() => toggleHeader(groupKey + ':' + h.key)}>
                 <td style={{ ...styles.td, fontWeight: 700 }} colSpan={2}>
                   <span style={{ marginRight: 6, fontFamily: 'Lora, serif', display: 'inline-block', width: 12 }}>{isHdrExpanded ? '▼' : '▶'}</span>
-                  {h.label} <span style={{ fontWeight: 400, color: '#808080', fontSize: '7.5pt' }}>({header.accounts.length} accounts)</span>
+                  {h.label} <span style={{ fontWeight: 400, color: C.text2, fontSize: '7.5pt' }}>({header.accounts.length} accounts)</span>
                 </td>
                 {visibleMonths.map((m) => {
                   const total = accountsTotalForMonth(header.accounts, m);
@@ -3149,12 +3202,12 @@ function PnlForecastTab({ data, save }) {
 
   return (
     <div>
-      <div style={{ marginBottom: 12, padding: 14, background: '#FAFAFA', border: '1px solid #D9D9D9', borderLeft: '3px solid #000', fontSize: '8.5pt', color: '#404040' }}>
+      <div style={{ marginBottom: 12, padding: 14, background: C.surface, border: `1px solid ${C.border}`, borderLeft: '3px solid #000', fontSize: '8.5pt', color: C.text2 }}>
         <strong>Driver-based P&L forecast</strong> — Click any header ▶ to expand its accounts. Click ▸ next to an account to open driver-based planning (e.g. headcount × salary, count × ARPU). Edit monthly cells directly, or set drivers and "Apply to future months" to bulk-update.
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-        <div style={{ fontSize: '8pt', color: '#808080' }}>
+        <div style={{ fontSize: '8pt', color: C.text2 }}>
           Showing {viewCount} of {allMonths.length} months · Starting {monthLabel(visibleMonths[0])}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -3316,7 +3369,7 @@ function Forecast({ data, save, currentMonth, totalExpenses }) {
               const newId = 'custom_' + Date.now();
               updateModel((m) => ({
                 ...m,
-                scenarios: [...m.scenarios, { id: newId, name: 'Custom Scenario', description: 'Click to edit', color: '#404040', overrides: {} }],
+                scenarios: [...m.scenarios, { id: newId, name: 'Custom Scenario', description: 'Click to edit', color: C.text2, overrides: {} }],
                 activeScenario: newId,
               }));
             }}
@@ -3510,7 +3563,7 @@ function DriversTab({ model, computed, activeScenario, onUpdateValue, onUpdateFi
         <div key={groupName} style={{ marginBottom: 18 }}>
           <div style={styles.driverGroupHeader}>
             <span style={{ fontFamily: 'Lora, serif', fontWeight: 700 }}>{groupName}</span>
-            <span style={{ fontSize: '7pt', color: '#808080' }}>{drivers.length} driver{drivers.length > 1 ? 's' : ''}</span>
+            <span style={{ fontSize: '7pt', color: C.text2 }}>{drivers.length} driver{drivers.length > 1 ? 's' : ''}</span>
           </div>
           <div style={styles.scrollTable}>
             <table style={{ ...styles.table, fontSize: '7.5pt' }}>
@@ -3535,7 +3588,7 @@ function DriversTab({ model, computed, activeScenario, onUpdateValue, onUpdateFi
                         <div style={{ fontWeight: 600 }}>
                           <EditableValue type="text" value={d.name} onChange={(v) => onUpdateField(d.id, 'name', v)} />
                         </div>
-                        <div style={{ fontSize: '6.5pt', color: '#808080', marginTop: 2, fontStyle: 'italic' }}>
+                        <div style={{ fontSize: '6.5pt', color: C.text2, marginTop: 2, fontStyle: 'italic' }}>
                           {d.description}
                         </div>
                         {override && (
@@ -3544,7 +3597,7 @@ function DriversTab({ model, computed, activeScenario, onUpdateValue, onUpdateFi
                           </div>
                         )}
                       </td>
-                      <td style={{ ...styles.td, textAlign: 'center', fontSize: '6.5pt', color: '#808080' }}>{d.unit}</td>
+                      <td style={{ ...styles.td, textAlign: 'center', fontSize: '6.5pt', color: C.text2 }}>{d.unit}</td>
                       {model.periods.map((p) => {
                         const rawVal = d.values[p] ?? 0;
                         const displayVal = computed[d.id]?.[p] ?? rawVal; // scenario-adjusted
@@ -3559,7 +3612,7 @@ function DriversTab({ model, computed, activeScenario, onUpdateValue, onUpdateFi
                               />
                             </div>
                             {isOverridden && (
-                              <div style={{ fontSize: '6pt', color: '#808080', fontStyle: 'italic' }}>
+                              <div style={{ fontSize: '6pt', color: C.text2, fontStyle: 'italic' }}>
                                 → {d.unit === '$' ? fmt(displayVal) : displayVal.toFixed(1)}
                               </div>
                             )}
@@ -3624,11 +3677,11 @@ function MetricsTab({ model, computed, onUpdateMetric, onDeleteMetric, onAddMetr
                   <span style={styles.metricGroupTag}>{metric.group}</span>
                 </div>
                 <div style={styles.metricFormula}>
-                  <span style={{ color: '#808080' }}>=</span> <code>{metric.formula}</code>
+                  <span style={{ color: C.text2 }}>=</span> <code>{metric.formula}</code>
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '6.5pt', color: '#808080', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <div style={{ fontSize: '6.5pt', color: C.text2, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Last Month ({monthLabel(model.periods[model.periods.length - 1])})
                 </div>
                 <div style={{ fontFamily: 'Lora, serif', fontSize: '13pt', fontWeight: 700, lineHeight: 1 }}>
@@ -3644,7 +3697,7 @@ function MetricsTab({ model, computed, onUpdateMetric, onDeleteMetric, onAddMetr
 
             {isExpanded && (
               <div style={styles.metricExpand}>
-                <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', marginBottom: 6 }}>
+                <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, marginBottom: 6 }}>
                   Monthly Projection
                 </div>
                 <div style={styles.scrollTable}>
@@ -3671,18 +3724,18 @@ function MetricsTab({ model, computed, onUpdateMetric, onDeleteMetric, onAddMetr
                   </table>
                 </div>
 
-                <div style={{ marginTop: 12, fontSize: '7.5pt', color: '#404040' }}>
+                <div style={{ marginTop: 12, fontSize: '7.5pt', color: C.text2 }}>
                   <strong>Description:</strong> <EditableValue type="text" value={metric.description || ''} onChange={(v) => onUpdateMetric(metric.id, 'description', v)} />
                 </div>
 
-                <div style={{ marginTop: 8, fontSize: '7.5pt', color: '#404040' }}>
+                <div style={{ marginTop: 8, fontSize: '7.5pt', color: C.text2 }}>
                   <strong>Dependencies:</strong>{' '}
                   {(() => {
                     const { deps, prevDeps } = getFormulaDependencies(metric.formula);
                     const all = [...deps, ...prevDeps.map((d) => `${d} (prev)`)];
                     return all.length > 0 ? all.map((d) => (
                       <span key={d} style={styles.depChip}>{d}</span>
-                    )) : <em style={{ color: '#808080' }}>no dependencies</em>;
+                    )) : <em style={{ color: C.text2 }}>no dependencies</em>;
                   })()}
                 </div>
               </div>
@@ -3957,7 +4010,7 @@ function ScenarioCompareTab({ model, allScenarios, updateModel, data }) {
                       <span style={{ width: 10, height: 10, borderRadius: '50%', background: s.color }}></span>
                       <div>
                         <div style={{ fontWeight: 600 }}>{s.name}</div>
-                        <div style={{ fontSize: '6.5pt', color: '#808080' }}>{Object.keys(s.overrides).length} overrides</div>
+                        <div style={{ fontSize: '6.5pt', color: C.text2 }}>{Object.keys(s.overrides).length} overrides</div>
                       </div>
                     </div>
                   </td>
@@ -3989,17 +4042,17 @@ function ScenarioCompareTab({ model, allScenarios, updateModel, data }) {
                   <button onClick={() => deleteScenario(s.id)} style={styles.miniBtn}>×</button>
                 )}
               </div>
-              <div style={{ fontSize: '7.5pt', color: '#404040', fontStyle: 'italic', marginBottom: 8 }}>
+              <div style={{ fontSize: '7.5pt', color: C.text2, fontStyle: 'italic', marginBottom: 8 }}>
                 <EditableValue type="text" value={s.description} onChange={(v) => updateScenario(s.id, 'description', v)} />
               </div>
 
               {/* Overrides list */}
               <div style={{ fontSize: '7.5pt' }}>
-                <div style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '6.5pt', color: '#808080', marginBottom: 4 }}>
+                <div style={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '6.5pt', color: C.text2, marginBottom: 4 }}>
                   Driver Overrides ({Object.keys(s.overrides).length})
                 </div>
                 {Object.keys(s.overrides).length === 0 ? (
-                  <div style={{ color: '#808080', fontStyle: 'italic', fontSize: '7pt' }}>No overrides — uses base drivers</div>
+                  <div style={{ color: C.text2, fontStyle: 'italic', fontSize: '7pt' }}>No overrides — uses base drivers</div>
                 ) : (
                   Object.entries(s.overrides).map(([driverId, override]) => {
                     const driver = model.drivers.find((d) => d.id === driverId);
@@ -4046,8 +4099,8 @@ function ScenarioOverrideEditor({ scenario, drivers, onAdd }) {
   const [value, setValue] = useState(1);
 
   return (
-    <div style={{ marginTop: 8, padding: 10, background: '#F2F2F2', border: '1px solid #D9D9D9' }}>
-      <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', marginBottom: 6 }}>
+    <div style={{ marginTop: 8, padding: 10, background: '#F2F2F2', border: `1px solid ${C.border}` }}>
+      <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, marginBottom: 6 }}>
         Add Override
       </div>
       <select value={selectedDriver} onChange={(e) => setSelectedDriver(e.target.value)} style={{ ...styles.select, width: '100%', marginBottom: 6 }}>
@@ -4065,7 +4118,7 @@ function ScenarioOverrideEditor({ scenario, drivers, onAdd }) {
           type="number"
           value={value}
           onChange={(e) => setValue(parseFloat(e.target.value) || 0)}
-          style={{ width: 70, border: '1px solid #D9D9D9', padding: '4px 6px', fontFamily: 'inherit', fontSize: '8pt' }}
+          style={{ width: 70, border: `1px solid ${C.border}`, padding: '4px 6px', fontFamily: 'inherit', fontSize: '8pt' }}
           step="0.1"
         />
       </div>
@@ -4191,7 +4244,7 @@ function ScenarioCompareChart({ model, allScenarios, metricId, metric }) {
     fmt(v);
 
   return (
-    <div style={{ background: '#FAFAFA', border: '1px solid #D9D9D9', padding: 16 }}>
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, padding: 16 }}>
       <div style={{ fontFamily: 'Lora, serif', fontSize: '10pt', fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         {metric.name} · Scenario Comparison
       </div>
@@ -4313,7 +4366,7 @@ function AddMetricModal({ model, onClose, onSave, onOpenFormulaHelper }) {
               Formula Builder
             </button>
           </div>
-          <div style={{ fontSize: '7pt', color: '#808080', marginTop: 4 }}>
+          <div style={{ fontSize: '7pt', color: C.text2, marginTop: 4 }}>
             Reference drivers with <code>d_xxx</code>, metrics with <code>m_xxx</code>, previous month with <code>[prev:m_xxx]</code>
           </div>
         </label>
@@ -4485,18 +4538,18 @@ Example response: m_cash_balance - (m_total_costs * 2)`;
             {testResult !== null && (
               <span style={{ fontSize: '9pt' }}>
                 = <strong>{typeof testResult === 'number' ? (Math.abs(testResult) > 1000 ? fmt(testResult) : testResult.toFixed(2)) : testResult}</strong>
-                <span style={{ color: '#808080', marginLeft: 8, fontSize: '7.5pt' }}>for {monthLabel(testMonth)}</span>
+                <span style={{ color: C.text2, marginLeft: 8, fontSize: '7.5pt' }}>for {monthLabel(testMonth)}</span>
               </span>
             )}
           </div>
 
           {/* AI Formula generator */}
-          <div style={{ marginTop: 16, padding: 12, background: '#F2F2F2', border: '1px solid #D9D9D9' }}>
+          <div style={{ marginTop: 16, padding: 12, background: '#F2F2F2', border: `1px solid ${C.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <span style={{ width: 20, height: 20, background: '#000', color: '#fff', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Lora, serif', fontSize: '9pt', fontWeight: 700 }}>M</span>
               <span style={{ fontSize: '8pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>AI Formula Builder</span>
             </div>
-            <div style={{ fontSize: '7.5pt', color: '#404040', marginBottom: 6 }}>
+            <div style={{ fontSize: '7.5pt', color: C.text2, marginBottom: 6 }}>
               Describe what you want to calculate in plain English. AI will generate the formula.
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -4523,7 +4576,7 @@ Example response: m_cash_balance - (m_total_costs * 2)`;
 
         {/* RIGHT: Insert panel */}
         <div>
-          <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', marginBottom: 6 }}>
+          <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, marginBottom: 6 }}>
             Click to Insert
           </div>
 
@@ -4541,7 +4594,7 @@ Example response: m_cash_balance - (m_total_costs * 2)`;
             <div style={{ maxHeight: 120, overflowY: 'auto', border: '1px solid #E8E8E8', padding: 4 }}>
               {model.drivers.map((d) => (
                 <div key={d.id} onClick={() => insertAtCursor(d.id)} style={styles.pickerRow}>
-                  <span style={{ fontSize: '7pt', color: '#808080' }}>d_</span>
+                  <span style={{ fontSize: '7pt', color: C.text2 }}>d_</span>
                   <span style={{ fontSize: '8pt' }}>{d.name}</span>
                 </div>
               ))}
@@ -4554,7 +4607,7 @@ Example response: m_cash_balance - (m_total_costs * 2)`;
               {model.metrics.map((m) => (
                 <div key={m.id} style={styles.pickerRow}>
                   <span onClick={() => insertAtCursor(m.id)} style={{ flex: 1, display: 'flex', gap: 4 }}>
-                    <span style={{ fontSize: '7pt', color: '#808080' }}>m_</span>
+                    <span style={{ fontSize: '7pt', color: C.text2 }}>m_</span>
                     <span style={{ fontSize: '8pt' }}>{m.name}</span>
                   </span>
                   <button onClick={() => insertAtCursor(`[prev:${m.id}]`)} style={{ ...styles.chipBtn, padding: '1px 4px', fontSize: '6.5pt' }}>prev</button>
@@ -4565,7 +4618,7 @@ Example response: m_cash_balance - (m_total_costs * 2)`;
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: '1px solid #D9D9D9' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
         <button onClick={onClose} style={styles.btnSecondary}>Cancel</button>
         <button onClick={() => onSave(formula, context.metricId || existing?.id)} style={styles.btnPrimary}>Save Formula</button>
       </div>
@@ -4707,8 +4760,8 @@ function RiskScenarios({ data, save }) {
                 </div>
               </div>
 
-              <div style={{ marginTop: 12, padding: 10, background: '#F2F2F2', border: '1px solid #D9D9D9' }}>
-                <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', marginBottom: 4 }}>Calculated Outputs</div>
+              <div style={{ marginTop: 12, padding: 10, background: '#F2F2F2', border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, marginBottom: 4 }}>Calculated Outputs</div>
                 <div style={{ fontSize: '8pt', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                   <span>Q1 Revenue:</span>
                   <strong>{fmt(calc.q1Total)}</strong>
@@ -4723,7 +4776,7 @@ function RiskScenarios({ data, save }) {
                 </div>
               </div>
 
-              <div style={{ marginTop: 10, fontSize: '7.5pt', color: '#404040', fontStyle: 'italic' }}>
+              <div style={{ marginTop: 10, fontSize: '7.5pt', color: C.text2, fontStyle: 'italic' }}>
                 <EditableValue type="text" value={s.assumptions} onChange={(v) => updateScenario(s.id, 'assumptions', v)} />
               </div>
             </div>
@@ -5033,7 +5086,7 @@ function Actions({ data, save, viewport }) {
 
       {/* FILTERS */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap', fontSize: '7.5pt' }}>
-        <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', fontWeight: 600 }}>Filter:</span>
+        <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, fontWeight: 600 }}>Filter:</span>
         <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} style={styles.select}>
           {categories.map((c) => <option key={c} value={c}>{c === 'all' ? 'All categories' : c}</option>)}
         </select>
@@ -5108,10 +5161,10 @@ function TodayView({ overdue, dueToday, inProgress, upNext, onSelect, onUpdate, 
       <div style={styles.todayHeader}>
         <div>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '20pt', fontWeight: 700, lineHeight: 1 }}>{dayName}</div>
-          <div style={{ fontSize: '9pt', color: '#808080', marginTop: 2 }}>{dateStr}</div>
+          <div style={{ fontSize: '9pt', color: C.text2, marginTop: 2 }}>{dateStr}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080' }}>Focus</div>
+          <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2 }}>Focus</div>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '14pt', fontWeight: 700 }}>{overdue.length + dueToday.length} need attention</div>
         </div>
       </div>
@@ -5133,9 +5186,9 @@ function TodayView({ overdue, dueToday, inProgress, upNext, onSelect, onUpdate, 
       )}
 
       {overdue.length === 0 && dueToday.length === 0 && inProgress.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', background: '#F2F2F2', border: '1px solid #D9D9D9' }}>
+        <div style={{ padding: 40, textAlign: 'center', background: '#F2F2F2', border: `1px solid ${C.border}` }}>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '16pt', fontWeight: 700, marginBottom: 6 }}>You're clear</div>
-          <div style={{ fontSize: '9pt', color: '#808080' }}>Nothing overdue or urgent. Use this time for strategic work.</div>
+          <div style={{ fontSize: '9pt', color: C.text2 }}>Nothing overdue or urgent. Use this time for strategic work.</div>
         </div>
       )}
     </div>
@@ -5144,7 +5197,7 @@ function TodayView({ overdue, dueToday, inProgress, upNext, onSelect, onUpdate, 
 
 function FocusBlock({ title, subtitle, tone, actions, onSelect, onUpdate, selectedId }) {
   const toneStyles = {
-    urgent: { borderLeft: '4px solid #000', background: '#FAFAFA' },
+    urgent: { borderLeft: '4px solid #000', background: C.surface },
     primary: { borderLeft: '4px solid #000', background: '#fff' },
     active: { borderLeft: '4px solid #808080', background: '#fff' },
     future: { borderLeft: '4px solid #D9D9D9', background: '#fff' },
@@ -5153,8 +5206,8 @@ function FocusBlock({ title, subtitle, tone, actions, onSelect, onUpdate, select
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6, ...toneStyles[tone], padding: '8px 12px' }}>
         <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{title}</div>
-        <div style={{ fontSize: '8pt', color: '#808080', fontStyle: 'italic' }}>{subtitle}</div>
-        <div style={{ marginLeft: 'auto', fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', fontWeight: 600 }}>{actions.length}</div>
+        <div style={{ fontSize: '8pt', color: C.text2, fontStyle: 'italic' }}>{subtitle}</div>
+        <div style={{ marginLeft: 'auto', fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, fontWeight: 600 }}>{actions.length}</div>
       </div>
       {actions.map((a) => (
         <ActionRow key={a.id} action={a} onSelect={onSelect} onUpdate={onUpdate} selectedId={selectedId} />
@@ -5220,7 +5273,7 @@ function ActionRow({ action, onSelect, onUpdate, selectedId }) {
       <div style={styles.actionPriority}>
         <div style={styles.actionEffortBadge}>{a.effort}</div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '6pt', textTransform: 'uppercase', color: '#808080', letterSpacing: '0.06em' }}>Score</div>
+          <div style={{ fontSize: '6pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>Score</div>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '13pt', fontWeight: 700, lineHeight: 1, color: a.priorityScore >= 8 ? '#000' : '#404040' }}>
             {a.priorityScore.toFixed(1)}
           </div>
@@ -5252,7 +5305,7 @@ function WeekView({ actions, onSelect, selectedId, onUpdate, today }) {
   return (
     <div>
       {overdueAll.length > 0 && (
-        <div style={{ marginBottom: 14, padding: '10px 12px', border: '1.5px solid #000', background: '#FAFAFA' }}>
+        <div style={{ marginBottom: 14, padding: '10px 12px', border: '1.5px solid #000', background: C.surface }}>
           <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, marginBottom: 6 }}>Overdue ({overdueAll.length}) — handle first</div>
           {overdueAll.slice(0, 3).map((a) => (
             <ActionRow key={a.id} action={a} onSelect={onSelect} onUpdate={onUpdate} selectedId={selectedId} />
@@ -5270,11 +5323,11 @@ function WeekView({ actions, onSelect, selectedId, onUpdate, today }) {
             <div key={i} style={{ background: isToday ? '#F2F2F2' : '#fff', minHeight: 200, padding: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, paddingBottom: 4, borderBottom: isToday ? '2px solid #000' : '1px solid #E8E8E8' }}>
                 <div>
-                  <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: '#808080', letterSpacing: '0.08em', fontWeight: isToday ? 700 : 500 }}>{dayName}</div>
+                  <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.08em', fontWeight: isToday ? 700 : 500 }}>{dayName}</div>
                   <div style={{ fontFamily: 'Lora, serif', fontSize: '14pt', fontWeight: 700, lineHeight: 1 }}>{dayNum}</div>
                 </div>
                 {items.length > 0 && (
-                  <div style={{ fontSize: '7pt', color: '#808080' }}>{items.length}</div>
+                  <div style={{ fontSize: '7pt', color: C.text2 }}>{items.length}</div>
                 )}
               </div>
               {items.map((a) => (
@@ -5342,13 +5395,13 @@ function TimelineView({ actions, onSelect, selectedId, today }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <div style={{ fontSize: '7.5pt', color: '#404040' }}>
+        <div style={{ fontSize: '7.5pt', color: C.text2 }}>
           Showing {visible.length} actions across the next {days} days
         </div>
       </div>
 
       {/* Week ruler */}
-      <div style={{ position: 'relative', height: 24, borderBottom: '1px solid #D9D9D9', marginBottom: 4 }}>
+      <div style={{ position: 'relative', height: 24, borderBottom: `1px solid ${C.border}`, marginBottom: 4 }}>
         {weekMarkers.map((m, i) => (
           <div key={i} style={{
             position: 'absolute',
@@ -5358,7 +5411,7 @@ function TimelineView({ actions, onSelect, selectedId, today }) {
             borderLeft: '1px dotted #D9D9D9',
             paddingLeft: 4,
             fontSize: '6.5pt',
-            color: '#808080',
+            color: C.text2,
             textTransform: 'uppercase',
             letterSpacing: '0.06em',
           }}>{m.label}</div>
@@ -5430,7 +5483,7 @@ function TimelineView({ actions, onSelect, selectedId, today }) {
       </div>
 
       {visible.length === 0 && (
-        <div style={{ padding: 30, textAlign: 'center', background: '#F2F2F2', border: '1px solid #D9D9D9', fontSize: '8.5pt', color: '#808080' }}>
+        <div style={{ padding: 30, textAlign: 'center', background: '#F2F2F2', border: `1px solid ${C.border}`, fontSize: '8.5pt', color: C.text2 }}>
           No actions in this window
         </div>
       )}
@@ -5451,16 +5504,16 @@ function StrategicView({ actions, onSelect, selectedId, onUpdate }) {
   };
 
   const Quadrant = ({ title, subtitle, items, accent, recommendation }) => (
-    <div style={{ background: '#fff', border: '1px solid #D9D9D9', borderTop: `3px solid ${accent}`, padding: 14 }}>
+    <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderTop: `3px solid ${accent}`, padding: 14 }}>
       <div style={{ marginBottom: 10 }}>
         <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700 }}>{title}</div>
-        <div style={{ fontSize: '7.5pt', color: '#808080', fontStyle: 'italic', marginTop: 2 }}>{subtitle}</div>
-        <div style={{ fontSize: '7.5pt', color: '#404040', marginTop: 4, padding: '4px 8px', background: '#F2F2F2', borderLeft: '2px solid ' + accent }}>
+        <div style={{ fontSize: '7.5pt', color: C.text2, fontStyle: 'italic', marginTop: 2 }}>{subtitle}</div>
+        <div style={{ fontSize: '7.5pt', color: C.text2, marginTop: 4, padding: '4px 8px', background: '#F2F2F2', borderLeft: '2px solid ' + accent }}>
           {recommendation}
         </div>
       </div>
       {items.length === 0 ? (
-        <div style={{ fontSize: '8pt', color: '#808080', fontStyle: 'italic', padding: 8 }}>None in this quadrant</div>
+        <div style={{ fontSize: '8pt', color: C.text2, fontStyle: 'italic', padding: 8 }}>None in this quadrant</div>
       ) : (
         items.slice(0, 5).map((a) => (
           <div key={a.id} onClick={() => onSelect(a.id)} style={{
@@ -5477,13 +5530,13 @@ function StrategicView({ actions, onSelect, selectedId, onUpdate }) {
           </div>
         ))
       )}
-      {items.length > 5 && <div style={{ fontSize: '7pt', color: '#808080', marginTop: 4 }}>+ {items.length - 5} more</div>}
+      {items.length > 5 && <div style={{ fontSize: '7pt', color: C.text2, marginTop: 4 }}>+ {items.length - 5} more</div>}
     </div>
   );
 
   return (
     <div>
-      <div style={{ marginBottom: 14, fontSize: '8.5pt', color: '#404040' }}>
+      <div style={{ marginBottom: 14, fontSize: '8.5pt', color: C.text2 }}>
         Prioritize where to spend energy. <strong>Quick wins</strong> first, then plan <strong>big bets</strong>, fit in <strong>fill-ins</strong>, and challenge <strong>questionable</strong> work.
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -5536,14 +5589,14 @@ function AllView({ actions, onSelect, selectedId, onUpdate }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, fontSize: '7.5pt' }}>
-        <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em', color: '#808080', fontWeight: 600 }}>Sort:</span>
+        <span style={{ textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, fontWeight: 600 }}>Sort:</span>
         {['priority', 'due', 'impact', 'created'].map((s) => (
           <button key={s} onClick={() => setSortBy(s)} style={{
             ...styles.filterBtn,
             ...(sortBy === s ? styles.filterBtnActive : {}),
           }}>{s}</button>
         ))}
-        <div style={{ marginLeft: 'auto', color: '#808080' }}>{sorted.length} actions</div>
+        <div style={{ marginLeft: 'auto', color: C.text2 }}>{sorted.length} actions</div>
       </div>
       {sorted.map((a) => (
         <ActionRow key={a.id} action={a} onSelect={onSelect} onUpdate={onUpdate} selectedId={selectedId} />
@@ -5587,7 +5640,7 @@ function ActionDetail({ action, data, isMobile, onUpdate, onUpdateFull, onDelete
         </div>
 
         {/* Description */}
-        <div style={{ fontSize: '8.5pt', color: '#404040', lineHeight: 1.5, marginBottom: 12, padding: 8, background: '#F8F8F8', border: '1px solid #E8E8E8' }}>
+        <div style={{ fontSize: '8.5pt', color: C.text2, lineHeight: 1.5, marginBottom: 12, padding: 8, background: '#f5f4ef', border: '1px solid #E8E8E8' }}>
           <EditableValue type="text" value={a.description} onChange={(v) => onUpdate('description', v)} />
         </div>
 
@@ -5644,7 +5697,7 @@ function ActionDetail({ action, data, isMobile, onUpdate, onUpdateFull, onDelete
             {linkedMetrics.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
           {a.linkedMetric && (
-            <div style={{ fontSize: '7pt', color: '#808080', marginTop: 4, fontStyle: 'italic' }}>
+            <div style={{ fontSize: '7pt', color: C.text2, marginTop: 4, fontStyle: 'italic' }}>
               This action drives {linkedMetrics.find((m) => m.id === a.linkedMetric)?.name} in your forecast model.
             </div>
           )}
@@ -5655,7 +5708,7 @@ function ActionDetail({ action, data, isMobile, onUpdate, onUpdateFull, onDelete
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
             <div style={styles.detailPropLabel}>Subtasks ({a.subtaskDone}/{a.subtaskTotal})</div>
             {a.subtaskTotal > 0 && (
-              <div style={{ fontSize: '7pt', color: '#404040' }}>{Math.round(a.progress * 100)}% done</div>
+              <div style={{ fontSize: '7pt', color: C.text2 }}>{Math.round(a.progress * 100)}% done</div>
             )}
           </div>
           {a.subtaskTotal > 0 && (
@@ -5703,13 +5756,13 @@ function ActionDetail({ action, data, isMobile, onUpdate, onUpdateFull, onDelete
             value={a.notes || ''}
             onChange={(e) => onUpdate('notes', e.target.value)}
             placeholder="Add context, decisions, references..."
-            style={{ width: '100%', minHeight: 60, padding: 8, marginTop: 4, border: '1px solid #D9D9D9', fontSize: '8pt', fontFamily: 'inherit', resize: 'vertical' }}
+            style={{ width: '100%', minHeight: 60, padding: 8, marginTop: 4, border: `1px solid ${C.border}`, fontSize: '8pt', fontFamily: 'inherit', resize: 'vertical' }}
           />
         </div>
 
         {/* Action footer */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid #D9D9D9' }}>
-          <div style={{ fontSize: '6.5pt', color: '#808080' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: '6.5pt', color: C.text2 }}>
             Created {a.created || '—'} · ID #{a.id}
           </div>
           <button onClick={onDelete} style={{ ...styles.btnGhost, color: '#000', borderColor: '#000' }}>Delete</button>
@@ -5842,7 +5895,7 @@ function MasterChartOfAccountsEditor({ data, save }) {
         <tr style={{ background: '#F2F2F2', fontWeight: 700, cursor: 'pointer' }} onClick={() => toggleHeader(groupKey, headerKey)}>
           <td style={{ ...styles.td, fontWeight: 700 }} colSpan={2}>
             <span style={{ marginRight: 6, fontFamily: 'Lora, serif' }}>{isExpanded ? '▼' : '▶'}</span>
-            {label} <span style={{ fontWeight: 400, color: '#808080', fontSize: '7.5pt' }}>({(accounts || []).length})</span>
+            {label} <span style={{ fontWeight: 400, color: C.text2, fontSize: '7.5pt' }}>({(accounts || []).length})</span>
           </td>
           {visibleMonths.map((m) => {
             const total = accountsTotalForMonth(accounts, m);
@@ -5854,9 +5907,9 @@ function MasterChartOfAccountsEditor({ data, save }) {
           <tr key={a.id}>
             <td style={{ ...styles.td, paddingLeft: 28, fontSize: '8.5pt' }}>
               <EditableValue type="text" value={a.name} onChange={(v) => updateAccountField(groupKey, headerKey, a.id, 'name', v)} />
-              {a.notes && <div style={{ fontSize: '6.5pt', color: '#808080', fontStyle: 'italic', marginTop: 2 }}>{a.notes}</div>}
+              {a.notes && <div style={{ fontSize: '6.5pt', color: C.text2, fontStyle: 'italic', marginTop: 2 }}>{a.notes}</div>}
             </td>
-            <td style={{ ...styles.td, fontSize: '7.5pt', color: '#404040' }}>
+            <td style={{ ...styles.td, fontSize: '7.5pt', color: C.text2 }}>
               <button
                 onClick={() => updateAccountField(groupKey, headerKey, a.id, 'committed', !a.committed)}
                 style={a.committed ? styles.committedBadge : styles.plannedBadge}
@@ -5896,7 +5949,7 @@ function MasterChartOfAccountsEditor({ data, save }) {
           <h4 style={{ fontFamily: 'Lora, serif', fontSize: '11pt', margin: 0, fontWeight: 700 }}>{title}</h4>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <button onClick={() => setStartIdx(Math.max(0, startIdx - 3))} style={{ ...styles.btnSecondary, fontSize: '7pt' }} disabled={startIdx === 0}>◀</button>
-            <div style={{ fontSize: '7.5pt', color: '#808080' }}>{visibleMonths[0]} – {visibleMonths[visibleMonths.length - 1]}</div>
+            <div style={{ fontSize: '7.5pt', color: C.text2 }}>{visibleMonths[0]} – {visibleMonths[visibleMonths.length - 1]}</div>
             <button onClick={() => setStartIdx(Math.min(allMonths.length - viewMonths, startIdx + 3))} style={{ ...styles.btnSecondary, fontSize: '7pt' }} disabled={startIdx + viewMonths >= allMonths.length}>▶</button>
           </div>
         </div>
@@ -5922,7 +5975,7 @@ function MasterChartOfAccountsEditor({ data, save }) {
   return (
     <div>
       {/* TABS for section switch */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 14, borderBottom: '2px solid #000' }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 14, borderBottom: `2px solid ${C.text}` }}>
         {[
           { key: 'expense', label: 'Expenses (6 headers × 5 accounts)' },
           { key: 'revenue', label: 'Revenue (4 headers × 5 accounts)' },
@@ -6024,7 +6077,7 @@ function DataManagement({ data, save }) {
       <SectionHeader num="7" title="Data Manager" subtitle="Master chart of accounts · Historical data · Import / Export" />
 
       <SubsectionHeader num="7A" title="Master Chart of Accounts" />
-      <div style={{ fontSize: '8.5pt', color: '#404040', marginBottom: 14, fontStyle: 'italic' }}>
+      <div style={{ fontSize: '8.5pt', color: C.text2, marginBottom: 14, fontStyle: 'italic' }}>
         This is the single source of truth for all P&L and Balance Sheet line items. Edit here and changes flow through to the Forecast tab. Every account has monthly values for history and forecast periods — edit any cell to update.
       </div>
       <MasterChartOfAccountsEditor data={data} save={save} />
@@ -6082,7 +6135,7 @@ function DataManagement({ data, save }) {
             <textarea
               value={exportText}
               readOnly
-              style={{ width: '100%', height: 200, marginTop: 8, fontSize: '7pt', fontFamily: 'monospace', padding: 8, border: '1px solid #D9D9D9' }}
+              style={{ width: '100%', height: 200, marginTop: 8, fontSize: '7pt', fontFamily: 'monospace', padding: 8, border: `1px solid ${C.border}` }}
             />
           )}
         </div>
@@ -6092,7 +6145,7 @@ function DataManagement({ data, save }) {
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
             placeholder='Paste exported JSON here...'
-            style={{ width: '100%', height: 200, fontSize: '7pt', fontFamily: 'monospace', padding: 8, border: '1px solid #D9D9D9' }}
+            style={{ width: '100%', height: 200, fontSize: '7pt', fontFamily: 'monospace', padding: 8, border: `1px solid ${C.border}` }}
           />
           <button onClick={importData} style={{ ...styles.btnPrimary, marginTop: 8 }} disabled={!importText.trim()}>Import Data</button>
           {importError && <div style={{ color: '#000', fontSize: '8pt', marginTop: 6 }}>⚠ {importError}</div>}
@@ -6114,7 +6167,7 @@ function RevenueTrendChart({ historical, forecast }) {
   const cH = H - P.top - P.bottom;
 
   return (
-    <div style={{ background: '#FAFAFA', border: '1px solid #D9D9D9', padding: 16 }}>
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, padding: 16 }}>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`}>
         {[0.25, 0.5, 0.75, 1].map((p) => {
           const y = P.top + cH * (1 - p);
@@ -6191,11 +6244,11 @@ function CashRunwayChart({ data, actualCount, minThreshold }) {
   const threshY = P.top + cH * (1 - minThreshold / max);
 
   return (
-    <div style={{ background: '#FAFAFA', border: '1px solid #D9D9D9', padding: 20 }}>
-      <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#808080', textAlign: 'center', marginBottom: 4 }}>
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, padding: 20 }}>
+      <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2, textAlign: 'center', marginBottom: 4 }}>
         Cash Balance Trend & Forecast
       </div>
-      <div style={{ fontSize: '8pt', color: '#404040', textAlign: 'center', marginBottom: 12 }}>
+      <div style={{ fontSize: '8pt', color: C.text2, textAlign: 'center', marginBottom: 12 }}>
         Auto-calculated from your historical data + forecast
       </div>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`}>
@@ -6297,7 +6350,7 @@ function AiPanel({ messages, input, setInput, loading, onSend, onClose, dataCont
         ))}
         {loading && (
           <div style={styles.aiLoadingRow}>
-            <Spinner /> <span style={{ marginLeft: 8, fontSize: '8pt', color: '#808080' }}>Thinking...</span>
+            <Spinner /> <span style={{ marginLeft: 8, fontSize: '8pt', color: C.text2 }}>Thinking...</span>
           </div>
         )}
         <div ref={messagesEnd} />
@@ -6332,10 +6385,12 @@ function AiPanel({ messages, input, setInput, loading, onSend, onClose, dataCont
 function SectionHeader({ num, title, subtitle }) {
   return (
     <div style={styles.sectionHeader}>
-      <div style={styles.sectionNum}>{num}</div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: 'Lora, serif', fontSize: '13pt', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</div>
-        <div style={{ fontSize: '7.5pt', color: '#808080', fontStyle: 'italic', marginTop: 2 }}>{subtitle}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: '7pt', fontWeight: 700, color: C.text3, fontFamily: 'monospace', letterSpacing: '0.05em' }}>{num}</span>
+          <span style={{ fontFamily: 'Lora, serif', fontSize: '14pt', fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>{title}</span>
+        </div>
+        {subtitle && <div style={{ fontSize: '7.5pt', color: C.text2, marginTop: 3 }}>{subtitle}</div>}
       </div>
     </div>
   );
@@ -6344,8 +6399,8 @@ function SectionHeader({ num, title, subtitle }) {
 function SubsectionHeader({ num, title }) {
   return (
     <div style={styles.subsectionHeader}>
-      <div style={styles.subsectionNum}>{num}</div>
-      <div style={{ fontFamily: 'Lora, serif', fontSize: '10pt', fontWeight: 600 }}>{title}</div>
+      <span style={{ fontSize: '6.5pt', fontWeight: 700, color: C.text3, fontFamily: 'monospace' }}>{num}</span>
+      <div style={{ fontFamily: 'Lora, serif', fontSize: '10pt', fontWeight: 600, color: C.text }}>{title}</div>
     </div>
   );
 }
@@ -6381,79 +6436,111 @@ function Modal({ title, children, onClose, wide = false }) {
 // ══════════════════════════════════════════════════════════════
 // STYLES
 // ══════════════════════════════════════════════════════════════
+const C = {
+  bg: '#f0efea', surface: '#ffffff', border: '#e5e3de', borderStrong: '#c8c6c1',
+  text: '#1a1a18', text2: '#696760', text3: '#a8a69e',
+  sidebar: '#141412',
+  green: '#16a34a', greenBg: '#f0fdf4', greenBorder: '#bbf7d0',
+  amber: '#d97706', amberBg: '#fffbeb', amberBorder: '#fde68a',
+  red: '#dc2626',   redBg: '#fef2f2',   redBorder: '#fecaca',
+};
+
 const styles = {
   app: {
     display: 'flex',
     minHeight: '100vh',
-    fontFamily: "'DM Sans', Arial, sans-serif",
+    fontFamily: "'DM Sans', -apple-system, sans-serif",
     fontSize: '9.5pt',
-    color: '#000',
-    background: '#cacaca',
+    color: C.text,
+    background: C.bg,
     lineHeight: 1.55,
   },
   loading: {
-    padding: 60,
+    padding: 80,
     fontFamily: "'Lora', Georgia, serif",
     fontSize: '14pt',
-    color: '#808080',
+    color: C.text2,
     textAlign: 'center',
   },
+
+  // ── Sidebar ────────────────────────────────────────────────────
   sidebar: {
-    width: 56,
-    background: '#000',
+    width: 216,
+    background: C.sidebar,
     color: '#fff',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    padding: '20px 0',
     flexShrink: 0,
-    transition: 'width 0.3s ease',
+    overflowY: 'auto',
   },
   sidebarLogo: {
-    color: '#fff',
-    textAlign: 'center',
-    marginBottom: 24,
-    width: '100%',
+    padding: '22px 20px 16px',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    marginBottom: 6,
+  },
+  navGroupLabel: {
+    fontSize: '6.5pt',
+    textTransform: 'uppercase',
+    letterSpacing: '0.12em',
+    color: 'rgba(255,255,255,0.3)',
+    fontWeight: 700,
+    padding: '10px 20px 4px',
   },
   navItem: {
-    width: '100%',
-    padding: '14px 12px',
-    cursor: 'pointer',
-    color: '#808080',
-    textAlign: 'center',
-    transition: 'all 0.15s ease',
-    borderLeft: '3px solid transparent',
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    gap: 2,
+    gap: 10,
+    padding: '9px 20px',
+    cursor: 'pointer',
+    color: 'rgba(255,255,255,0.55)',
+    transition: 'all 0.15s ease',
+    fontSize: '9pt',
+    fontWeight: 500,
+    borderLeft: '2px solid transparent',
+    userSelect: 'none',
   },
   navItemActive: {
-    background: '#fff',
-    color: '#000',
-    borderLeftColor: '#000',
+    background: 'rgba(255,255,255,0.1)',
+    color: '#ffffff',
+    borderLeftColor: '#ffffff',
+    fontWeight: 600,
   },
   navNum: {
-    fontFamily: 'Lora, serif',
-    fontSize: '12pt',
-    fontWeight: 700,
+    width: 18,
+    fontSize: '7.5pt',
+    color: 'rgba(255,255,255,0.22)',
+    fontFamily: 'monospace',
+    flexShrink: 0,
+    textAlign: 'right',
   },
   navLabel: {
-    fontSize: '6pt',
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    fontWeight: 500,
+    fontSize: '9pt',
+    fontWeight: 'inherit',
+    flex: 1,
+  },
+  navDivider: {
+    height: 1,
+    background: 'rgba(255,255,255,0.07)',
+    margin: '8px 16px',
   },
   navReset: {
     cursor: 'pointer',
-    color: '#808080',
-    padding: 12,
+    color: 'rgba(255,255,255,0.3)',
+    padding: '9px 20px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: '8.5pt',
     transition: 'color 0.15s ease',
   },
   navAction: {
-    padding: '10px 12px',
-    color: '#fff',
-    textAlign: 'center',
+    padding: '9px 20px',
+    color: 'rgba(255,255,255,0.45)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: '8.5pt',
+    cursor: 'pointer',
     transition: 'opacity 0.15s ease',
   },
   bottomNav: {
@@ -6461,11 +6548,11 @@ const styles = {
     bottom: 0,
     left: 0,
     right: 0,
-    background: '#000',
+    background: C.sidebar,
     display: 'grid',
     gridTemplateColumns: 'repeat(7, 1fr)',
     zIndex: 100,
-    boxShadow: '0 -4px 16px rgba(0,0,0,0.15)',
+    boxShadow: '0 -2px 12px rgba(0,0,0,0.2)',
   },
   bottomNavItem: {
     display: 'flex',
@@ -6473,57 +6560,413 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: '10px 4px 12px',
-    color: '#808080',
+    color: 'rgba(255,255,255,0.45)',
     cursor: 'pointer',
     minHeight: 56,
     textAlign: 'center',
+    borderTop: '2px solid transparent',
+    transition: 'all 0.15s ease',
   },
   bottomNavItemActive: {
-    background: '#fff',
-    color: '#000',
+    color: '#fff',
+    borderTopColor: '#fff',
+    background: 'rgba(255,255,255,0.08)',
   },
   toast: {
     position: 'fixed',
-    bottom: 100,
+    bottom: 80,
     left: '50%',
     transform: 'translateX(-50%)',
-    background: '#000',
+    background: C.text,
     color: '#fff',
     padding: '10px 20px',
     fontSize: '9pt',
     fontWeight: 500,
+    borderRadius: '6px',
     boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
     zIndex: 300,
     animation: 'toastIn 0.25s ease',
+    whiteSpace: 'nowrap',
   },
 
-  // xP&A FORECAST STYLES
+  // ── Main layout ────────────────────────────────────────────────
+  main: {
+    flex: 1,
+    background: C.bg,
+    minHeight: '100vh',
+    padding: '28px 36px 80px',
+    overflow: 'auto',
+  },
+  header: {
+    display: 'grid',
+    gridTemplateColumns: '1fr auto',
+    alignItems: 'center',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '8px',
+    padding: '16px 24px',
+    marginBottom: 20,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+  },
+  content: { paddingTop: 0 },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 18,
+    paddingBottom: 12,
+    borderBottom: `1px solid ${C.border}`,
+  },
+  sectionNum: {
+    fontFamily: 'Lora, serif',
+    fontSize: '11pt',
+    fontWeight: 700,
+    background: C.text,
+    color: '#fff',
+    width: 30,
+    height: 30,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '4px',
+    flexShrink: 0,
+  },
+  subsectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    borderBottom: `1px solid ${C.border}`,
+    paddingBottom: 6,
+    marginTop: 28,
+    marginBottom: 14,
+  },
+  subsectionNum: {
+    fontSize: '7.5pt',
+    fontWeight: 700,
+    background: '#ece9e3',
+    color: C.text2,
+    width: 24,
+    height: 24,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '3px',
+    flexShrink: 0,
+  },
+  subHeader: {
+    fontFamily: 'Lora, serif',
+    fontSize: '10.5pt',
+    fontWeight: 600,
+    marginBottom: 12,
+    paddingBottom: 6,
+    borderBottom: `1px solid ${C.border}`,
+    color: C.text,
+  },
+
+  // ── Status Strip ───────────────────────────────────────────────
+  ragStrip: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 10,
+    marginBottom: 18,
+  },
+  ragItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    padding: '10px 14px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+  },
+
+  // ── AI Insight ─────────────────────────────────────────────────
+  aiInsight: {
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderLeft: `3px solid ${C.text}`,
+    borderRadius: '0 6px 6px 0',
+    padding: '14px 18px',
+    marginBottom: 18,
+    display: 'flex',
+    gap: 14,
+    alignItems: 'flex-start',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  },
+  aiInsightIcon: {
+    width: 28,
+    height: 28,
+    background: C.text,
+    color: '#fff',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontFamily: 'Lora, serif',
+    fontWeight: 700,
+    fontSize: '11pt',
+    flexShrink: 0,
+  },
+  aiInsightLabel: {
+    fontSize: '7pt',
+    textTransform: 'uppercase',
+    letterSpacing: '0.1em',
+    color: C.text3,
+    fontWeight: 700,
+    marginBottom: 5,
+  },
+
+  // ── KPI Grid ────────────────────────────────────────────────────
+  kpiGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 10,
+    marginBottom: 18,
+  },
+  kpiCard: {
+    padding: '18px 20px',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'box-shadow 0.15s ease',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  kpiLabel: {
+    fontSize: '7.5pt',
+    textTransform: 'uppercase',
+    letterSpacing: '0.09em',
+    color: C.text3,
+    marginBottom: 6,
+    fontWeight: 600,
+  },
+  kpiValue: {
+    fontFamily: 'Lora, serif',
+    fontSize: '22pt',
+    fontWeight: 700,
+    lineHeight: 1.05,
+    color: C.text,
+  },
+  kpiSub: {
+    fontSize: '8pt',
+    color: C.text2,
+    marginTop: 5,
+  },
+  explainBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    background: 'transparent',
+    color: C.text3,
+    border: `1px solid ${C.border}`,
+    borderRadius: '3px',
+    padding: '2px 7px',
+    fontSize: '6.5pt',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    cursor: 'pointer',
+  },
+  monthSelectorBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '7px 12px',
+    background: C.text,
+    color: '#fff',
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: 'Lora, serif',
+    fontWeight: 600,
+    fontSize: '10pt',
+    borderRadius: '4px',
+  },
+  monthDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: 6,
+    background: '#fff',
+    border: `1px solid ${C.border}`,
+    borderRadius: '8px',
+    zIndex: 50,
+    minWidth: 230,
+    boxShadow: '0 6px 20px rgba(0,0,0,0.1)',
+    animation: 'slideDown 0.18s ease',
+    overflow: 'hidden',
+  },
+  monthDropdownItem: {
+    padding: '9px 16px',
+    cursor: 'pointer',
+    fontSize: '9pt',
+    borderBottom: `1px solid ${C.bg}`,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  monthDropdownItemActive: {
+    background: C.bg,
+    fontWeight: 600,
+  },
+  digestBox: {
+    padding: 16,
+    background: '#f5f4ef',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
+    fontSize: '9pt',
+    lineHeight: 1.65,
+    whiteSpace: 'pre-wrap',
+    fontFamily: 'inherit',
+    maxHeight: '60vh',
+    overflowY: 'auto',
+  },
+
+  // ── Quick Stats ────────────────────────────────────────────────
+  quickGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(6, 1fr)',
+    gap: 8,
+  },
+  quickStat: {
+    padding: '12px 14px',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+  },
+  qsLabel: {
+    fontSize: '7pt',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    color: C.text3,
+    marginBottom: 4,
+    fontWeight: 600,
+  },
+  qsValue: {
+    fontFamily: 'Lora, serif',
+    fontSize: '15pt',
+    fontWeight: 700,
+    lineHeight: 1,
+    color: C.text,
+  },
+
+  // ── Goal Cards ─────────────────────────────────────────────────
+  goalCard: {
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    padding: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  },
+  goalEditBtn: {
+    background: 'transparent',
+    border: `1px solid ${C.border}`,
+    color: C.text3,
+    fontSize: '7pt',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    padding: '3px 8px',
+    cursor: 'pointer',
+    borderRadius: '3px',
+  },
+
+  // ── What-If Panel ──────────────────────────────────────────────
+  whatIfPanel: {
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderLeft: `3px solid ${C.text}`,
+    borderRadius: '0 6px 6px 0',
+    padding: '16px 18px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  },
+  whatIfHeader: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottom: '1px solid #ece9e3',
+  },
+  whatIfSliderRow: {
+    display: 'grid',
+    gridTemplateColumns: '150px 1fr 90px',
+    alignItems: 'center',
+    gap: 14,
+    padding: '9px 0',
+    borderBottom: '1px solid #ece9e3',
+  },
+  whatIfLabel: {
+    fontSize: '8.5pt',
+    fontWeight: 600,
+    color: C.text,
+  },
+  whatIfSlider: {
+    width: '100%',
+    WebkitAppearance: 'none',
+    appearance: 'none',
+    height: 4,
+    background: '#dddbd6',
+    outline: 'none',
+    cursor: 'pointer',
+    borderRadius: '2px',
+  },
+  whatIfValue: {
+    fontFamily: 'Lora, serif',
+    fontSize: '11pt',
+    fontWeight: 700,
+    textAlign: 'right',
+  },
+  whatIfDelta: {
+    fontSize: '7pt',
+    color: C.text2,
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    textAlign: 'right',
+    marginTop: 2,
+  },
+  whatIfImpactRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 8,
+    marginTop: 12,
+  },
+  whatIfImpactCell: {
+    background: '#f5f4ef',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
+    padding: '10px 12px',
+  },
+
+  // ── xP&A Forecast Styles ───────────────────────────────────────
   scenarioBar: {
     display: 'grid',
     gridTemplateColumns: 'auto 1fr auto',
     gap: 16,
     alignItems: 'center',
     padding: '12px 16px',
-    background: '#F2F2F2',
-    border: '1px solid #D9D9D9',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
     marginBottom: 14,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   },
   scenarioBarLabel: {
     fontSize: '7pt',
     textTransform: 'uppercase',
     letterSpacing: '0.1em',
-    color: '#808080',
+    color: C.text3,
     fontWeight: 700,
   },
-  scenarioPills: {
-    display: 'flex',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
+  scenarioPills: { display: 'flex', gap: 6, flexWrap: 'wrap' },
   scenarioPill: {
     padding: '6px 12px',
     background: '#fff',
-    border: '1px solid #D9D9D9',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
     cursor: 'pointer',
     fontSize: '8pt',
     fontWeight: 500,
@@ -6531,67 +6974,73 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     letterSpacing: '0.02em',
+    transition: 'all 0.12s ease',
   },
   scenarioPillActive: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
-    borderColor: '#000',
+    borderColor: C.text,
     fontWeight: 600,
   },
   scenarioAddBtn: {
     padding: '6px 12px',
     background: 'transparent',
-    border: '1px dashed #808080',
+    border: `1px dashed ${C.borderStrong}`,
+    borderRadius: '4px',
     cursor: 'pointer',
     fontSize: '8pt',
     fontFamily: 'inherit',
-    color: '#404040',
+    color: C.text2,
   },
   scenarioDescription: {
     fontSize: '8pt',
-    color: '#404040',
+    color: C.text2,
     fontStyle: 'italic',
     textAlign: 'right',
     maxWidth: 280,
   },
-
   forecastTabs: {
     display: 'flex',
-    gap: 1,
-    background: '#D9D9D9',
-    border: '1px solid #808080',
+    gap: 2,
+    background: '#ece9e3',
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    padding: '3px',
     marginBottom: 14,
   },
   forecastTab: {
     flex: 1,
-    padding: '10px 12px',
-    background: '#fff',
-    color: '#000',
+    padding: '8px 12px',
+    background: 'transparent',
+    color: C.text2,
     border: 'none',
     cursor: 'pointer',
     fontFamily: 'inherit',
     fontSize: '8pt',
     fontWeight: 500,
-    letterSpacing: '0.04em',
+    letterSpacing: '0.03em',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    borderRadius: '4px',
+    transition: 'all 0.12s ease',
   },
   forecastTabActive: {
-    background: '#000',
-    color: '#fff',
-    fontWeight: 700,
+    background: '#fff',
+    color: C.text,
+    fontWeight: 600,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
   },
   tabNum: {
     fontFamily: 'Lora, serif',
     fontWeight: 700,
-    opacity: 0.7,
+    opacity: 0.5,
     fontSize: '10pt',
   },
   tabBadge: {
     fontSize: '6.5pt',
-    background: 'rgba(255,255,255,0.2)',
+    background: 'rgba(0,0,0,0.1)',
     padding: '1px 5px',
     borderRadius: 6,
   },
@@ -6602,10 +7051,12 @@ const styles = {
     gap: 16,
     alignItems: 'start',
     padding: '14px 18px',
-    background: 'linear-gradient(to right, #fff 0%, #FAFAFA 100%)',
-    border: '1px solid #E8E8E8',
-    borderLeft: '3px solid #000',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderLeft: `3px solid ${C.text}`,
+    borderRadius: '0 6px 6px 0',
     marginBottom: 16,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   },
   tabIntroTitle: {
     fontFamily: 'Lora, serif',
@@ -6616,41 +7067,41 @@ const styles = {
     letterSpacing: '0.04em',
   },
   tabIntroText: {
-    fontSize: '8pt',
-    color: '#404040',
+    fontSize: '8.5pt',
+    color: C.text2,
     lineHeight: 1.5,
     maxWidth: 640,
   },
-
   filterLabel: {
-    fontSize: '7pt',
+    fontSize: '7.5pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#808080',
+    color: C.text3,
     fontWeight: 600,
     marginRight: 4,
   },
 
-  // ─── ACTION CENTER STYLES ───────────────────────────────────
+  // ── Action Center ──────────────────────────────────────────────
   actionMetrics: {
     display: 'grid',
     gridTemplateColumns: 'repeat(6, 1fr)',
-    gap: 1,
-    background: '#000',
-    border: '1.5px solid #000',
+    gap: 8,
     marginBottom: 14,
   },
   actionMetric: {
-    background: '#fff',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
     padding: '12px 14px',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
   },
   actionMetricLabel: {
     fontSize: '6.5pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#808080',
+    color: C.text3,
     marginBottom: 4,
     fontWeight: 600,
   },
@@ -6659,46 +7110,57 @@ const styles = {
     fontSize: '20pt',
     fontWeight: 700,
     lineHeight: 1,
+    color: C.text,
   },
   quickCapture: {
     display: 'flex',
     gap: 8,
     alignItems: 'center',
-    padding: 10,
-    background: '#FAFAFA',
-    border: '1px solid #D9D9D9',
-    borderLeft: '3px solid #000',
+    padding: '10px 14px',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderLeft: `3px solid ${C.text}`,
+    borderRadius: '0 6px 6px 0',
     marginBottom: 14,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   },
   quickCaptureInput: {
     flex: 1,
-    border: '1px solid #D9D9D9',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
     padding: '8px 12px',
     fontSize: '9pt',
     fontFamily: 'inherit',
     outline: 'none',
+    background: '#fafaf8',
+    color: C.text,
   },
   actionViewTabs: {
     display: 'flex',
-    gap: 1,
-    background: '#D9D9D9',
-    border: '1px solid #808080',
-    marginBottom: 12,
+    gap: 2,
+    background: '#ece9e3',
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    padding: '3px',
+    marginBottom: 14,
     overflow: 'hidden',
   },
   actionViewTab: {
     flex: 1,
-    background: '#fff',
+    background: 'transparent',
     border: 'none',
     cursor: 'pointer',
-    padding: '10px 14px',
+    padding: '8px 12px',
     textAlign: 'center',
     fontFamily: 'inherit',
-    color: '#404040',
+    color: C.text2,
+    borderRadius: '4px',
+    transition: 'all 0.12s ease',
   },
   actionViewTabActive: {
-    background: '#000',
-    color: '#fff',
+    background: '#fff',
+    color: C.text,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
   },
   todayHeader: {
     display: 'flex',
@@ -6706,24 +7168,26 @@ const styles = {
     alignItems: 'flex-end',
     marginBottom: 18,
     paddingBottom: 10,
-    borderBottom: '1.5px solid #000',
+    borderBottom: `1.5px solid ${C.border}`,
   },
   actionRow: {
     display: 'flex',
     alignItems: 'flex-start',
     gap: 12,
-    padding: '10px 12px',
-    background: '#fff',
-    border: '1px solid #E8E8E8',
-    marginBottom: 4,
+    padding: '10px 14px',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    marginBottom: 5,
     cursor: 'pointer',
-    transition: 'all 0.12s ease',
+    transition: 'box-shadow 0.12s ease',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   },
   actionCheckbox: {
     width: 20,
     height: 20,
-    border: '1.5px solid #000',
-    borderRadius: 2,
+    border: `1.5px solid ${C.borderStrong}`,
+    borderRadius: '4px',
     flexShrink: 0,
     cursor: 'pointer',
     display: 'flex',
@@ -6732,21 +7196,23 @@ const styles = {
     fontSize: '11pt',
     fontWeight: 700,
     background: '#fff',
-    color: '#000',
+    color: C.text,
     marginTop: 2,
   },
   actionCheckboxDone: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
+    borderColor: C.text,
   },
   actionRowTitle: {
     fontSize: '9.5pt',
     fontWeight: 600,
     lineHeight: 1.3,
+    color: C.text,
   },
   actionMeta: {
     fontSize: '7pt',
-    color: '#808080',
+    color: C.text3,
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
     fontWeight: 500,
@@ -6754,9 +7220,10 @@ const styles = {
   actionCategoryTag: {
     fontSize: '6.5pt',
     padding: '1px 6px',
-    background: '#F2F2F2',
-    border: '1px solid #D9D9D9',
-    color: '#404040',
+    background: '#ece9e3',
+    border: `1px solid ${C.border}`,
+    borderRadius: '3px',
+    color: C.text2,
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
     fontWeight: 600,
@@ -6770,80 +7237,86 @@ const styles = {
   actionEffortBadge: {
     width: 22,
     height: 22,
-    border: '1px solid #808080',
-    background: '#fff',
-    color: '#000',
+    border: `1px solid ${C.border}`,
+    background: '#f5f4ef',
+    color: C.text,
     fontFamily: 'Lora, serif',
     fontSize: '10pt',
     fontWeight: 700,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 2,
+    borderRadius: '3px',
   },
   actionProgressTrack: {
-    background: '#F2F2F2',
+    background: '#ece9e3',
     height: 4,
-    border: '1px solid #E8E8E8',
+    borderRadius: '2px',
     marginTop: 6,
     width: '100%',
+    overflow: 'hidden',
   },
   actionProgressFill: {
-    background: '#000',
+    background: C.text,
     height: '100%',
+    borderRadius: '2px',
     transition: 'width 0.3s ease',
   },
   actionDetail: {
-    background: '#fff',
-    border: '1.5px solid #000',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '8px',
     position: 'sticky',
     top: 16,
     maxHeight: 'calc(100vh - 80px)',
     overflowY: 'auto',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
   },
   actionDetailHeader: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
-    padding: '10px 16px',
+    padding: '12px 16px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderRadius: '8px 8px 0 0',
   },
   detailPropsGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gap: 10,
+    gap: 8,
     marginBottom: 14,
   },
   detailProp: {
-    background: '#F8F8F8',
-    border: '1px solid #E8E8E8',
-    padding: '6px 10px',
+    background: '#f5f4ef',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
+    padding: '7px 10px',
   },
   detailPropLabel: {
     fontSize: '6.5pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#808080',
+    color: C.text3,
     marginBottom: 3,
     fontWeight: 600,
   },
   detailPropValue: {
     fontSize: '9pt',
     fontWeight: 500,
+    color: C.text,
   },
   subtaskRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
     padding: '5px 6px',
-    borderBottom: '1px solid #F2F2F2',
+    borderBottom: `1px solid ${C.bg}`,
   },
-
   driverGroupHeader: {
-    background: '#F2F2F2',
+    background: '#f5f4ef',
     padding: '6px 12px',
-    border: '1px solid #D9D9D9',
+    border: `1px solid ${C.border}`,
     borderBottom: 'none',
     display: 'flex',
     justifyContent: 'space-between',
@@ -6851,31 +7324,34 @@ const styles = {
     fontSize: '9pt',
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
+    borderRadius: '4px 4px 0 0',
   },
   scrollTable: {
     overflowX: 'auto',
     maxWidth: '100%',
-    border: '1px solid #D9D9D9',
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
   },
   overrideBadge: {
     display: 'inline-block',
     marginTop: 4,
     padding: '2px 6px',
-    background: '#000',
+    background: C.text,
     color: '#fff',
     fontSize: '6pt',
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
     fontWeight: 600,
-    borderRadius: 2,
+    borderRadius: '3px',
   },
-
   metricCard: {
     marginBottom: 8,
-    background: '#fff',
-    border: '1px solid #D9D9D9',
-    borderLeft: '3px solid #000',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderLeft: `3px solid ${C.text}`,
+    borderRadius: '0 6px 6px 0',
     overflow: 'hidden',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
   },
   metricHeader: {
     display: 'flex',
@@ -6896,47 +7372,47 @@ const styles = {
     fontSize: '6pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    background: '#F2F2F2',
-    color: '#808080',
+    background: '#ece9e3',
+    color: C.text2,
     padding: '1px 6px',
-    borderRadius: 2,
+    borderRadius: '3px',
     fontWeight: 600,
   },
   pinBadge: {
     fontSize: '6pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    background: '#000',
+    background: C.text,
     color: '#fff',
     padding: '1px 5px',
-    borderRadius: 2,
+    borderRadius: '3px',
     fontWeight: 700,
   },
   metricFormula: {
     fontSize: '8pt',
     fontFamily: 'monospace',
-    color: '#404040',
+    color: C.text2,
   },
   metricExpand: {
     padding: '12px 14px',
-    background: '#FAFAFA',
-    borderTop: '1px solid #E8E8E8',
+    background: '#f5f4ef',
+    borderTop: `1px solid ${C.border}`,
   },
   depChip: {
     display: 'inline-block',
     padding: '1px 6px',
-    background: '#F2F2F2',
-    border: '1px solid #E8E8E8',
-    borderRadius: 2,
+    background: '#ece9e3',
+    border: `1px solid ${C.border}`,
+    borderRadius: '3px',
     fontFamily: 'monospace',
     fontSize: '7pt',
     marginRight: 4,
     marginBottom: 2,
   },
-
   miniBtnLabel: {
-    background: '#fff',
-    border: '1px solid #D9D9D9',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '3px',
     padding: '3px 8px',
     fontSize: '6.5pt',
     fontWeight: 700,
@@ -6944,257 +7420,68 @@ const styles = {
     letterSpacing: '0.06em',
     cursor: 'pointer',
     fontFamily: 'inherit',
-    color: '#000',
+    color: C.text,
   },
-
   scenarioCardV2: {
-    background: '#fff',
-    border: '1px solid #D9D9D9',
-    padding: '12px 14px',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    padding: '14px 16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   },
   overrideRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    padding: '3px 0',
-    borderBottom: '1px dotted #E8E8E8',
+    padding: '4px 0',
+    borderBottom: '1px dotted #ece9e3',
   },
-
   formLabel: {
     display: 'block',
     fontSize: '7.5pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#404040',
+    color: C.text2,
     fontWeight: 600,
     marginBottom: 4,
   },
   formInput: {
     width: '100%',
     padding: '8px 10px',
-    border: '1px solid #D9D9D9',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
     fontFamily: 'inherit',
     fontSize: '9pt',
     outline: 'none',
     marginTop: 4,
+    background: C.surface,
+    color: C.text,
   },
   chipBtn: {
     padding: '3px 8px',
-    background: '#F2F2F2',
-    border: '1px solid #D9D9D9',
+    background: '#ece9e3',
+    border: `1px solid ${C.border}`,
+    borderRadius: '3px',
     cursor: 'pointer',
     fontFamily: 'monospace',
     fontSize: '8pt',
     fontWeight: 600,
+    color: C.text,
   },
   pickerRow: {
-    padding: '4px 6px',
+    padding: '5px 8px',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     gap: 4,
-    borderBottom: '1px dotted #E8E8E8',
+    borderBottom: '1px dotted #ece9e3',
+    transition: 'background 0.1s',
   },
-  main: {
-    flex: 1,
-    background: '#fff',
-    minHeight: '100vh',
-    padding: '32px 48px 60px',
-    overflow: 'auto',
-  },
-  header: {
-    display: 'grid',
-    gridTemplateColumns: '1fr auto',
-    alignItems: 'end',
-    borderBottom: '2.5px solid #000',
-    paddingBottom: 13,
-    marginBottom: 22,
-  },
-  content: {
-    paddingTop: 8,
-  },
-  sectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    borderBottom: '1.5px solid #000',
-    paddingBottom: 8,
-    marginBottom: 18,
-  },
-  sectionNum: {
-    fontFamily: 'Lora, serif',
-    fontSize: '14pt',
-    fontWeight: 700,
-    background: '#000',
-    color: '#fff',
-    width: 36,
-    height: 36,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 2,
-  },
-  subsectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    borderBottom: '1px solid #D9D9D9',
-    paddingBottom: 4,
-    marginTop: 26,
-    marginBottom: 14,
-  },
-  subsectionNum: {
-    fontSize: '8pt',
-    fontWeight: 700,
-    background: '#F2F2F2',
-    color: '#000',
-    width: 24,
-    height: 24,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 2,
-  },
-  subHeader: {
-    fontFamily: 'Lora, serif',
-    fontSize: '10pt',
-    fontWeight: 600,
-    marginBottom: 10,
-    paddingBottom: 4,
-    borderBottom: '1px solid #D9D9D9',
-  },
-  ragStrip: {
-    display: 'flex',
-    border: '1px solid #D9D9D9',
-    marginBottom: 20,
-    overflow: 'hidden',
-  },
-  ragItem: {
-    flex: 1,
-    padding: '9px 13px',
-    borderRight: '1px solid #D9D9D9',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-  },
-  aiInsight: {
-    background: 'linear-gradient(to right,#fff 0%,#FAFAFA 100%)',
-    border: '1px solid #D9D9D9',
-    borderLeft: '3px solid #000',
-    padding: '12px 16px',
-    marginBottom: 18,
-    display: 'flex',
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  aiInsightIcon: {
-    width: 24,
-    height: 24,
-    background: '#000',
-    color: '#fff',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontFamily: 'Lora, serif',
-    fontWeight: 700,
-    fontSize: '10pt',
-    flexShrink: 0,
-  },
-  aiInsightLabel: {
-    fontSize: '6.5pt',
-    textTransform: 'uppercase',
-    letterSpacing: '0.1em',
-    color: '#808080',
-    fontWeight: 700,
-    marginBottom: 4,
-  },
-  kpiGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 0,
-    border: '1.5px solid #000',
-  },
-  kpiCard: {
-    padding: '16px 18px',
-    borderRight: '1px solid #808080',
-    cursor: 'pointer',
-    transition: 'background 0.15s ease',
-  },
-  kpiLabel: {
-    fontSize: '7pt',
-    textTransform: 'uppercase',
-    letterSpacing: '0.1em',
-    color: '#808080',
-    marginBottom: 4,
-  },
-  kpiValue: {
-    fontFamily: 'Lora, serif',
-    fontSize: '20pt',
-    fontWeight: 700,
-    lineHeight: 1.05,
-  },
-  kpiSub: {
-    fontSize: '7.5pt',
-    color: '#404040',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  explainBtn: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    background: '#000',
-    color: '#fff',
-    border: 'none',
-    padding: '3px 8px',
-    fontSize: '6.5pt',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    cursor: 'pointer',
-  },
-  monthSelectorBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '6px 10px',
-    background: '#000',
-    color: '#fff',
-    border: 'none',
-    cursor: 'pointer',
-    fontFamily: 'Lora, serif',
-    fontWeight: 600,
-    fontSize: '10pt',
-  },
-  monthDropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    marginTop: 4,
-    background: '#fff',
-    border: '1.5px solid #000',
-    zIndex: 50,
-    minWidth: 220,
-    boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-  },
-  monthDropdownItem: {
-    padding: '8px 14px',
-    cursor: 'pointer',
-    fontSize: '9pt',
-    borderBottom: '1px solid #F2F2F2',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  monthDropdownItemActive: {
-    background: '#F2F2F2',
-    fontWeight: 600,
-  },
-  digestBox: {
-    padding: 14,
-    background: '#FAFAFA',
-    border: '1px solid #D9D9D9',
+  digestBox2: {
+    padding: 16,
+    background: '#f5f4ef',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
     fontSize: '9pt',
     lineHeight: 1.6,
     whiteSpace: 'pre-wrap',
@@ -7202,11 +7489,12 @@ const styles = {
     maxHeight: '60vh',
     overflowY: 'auto',
   },
-  // Account drilldown styles
+  // ── Account Drilldown ──────────────────────────────────────────
   accountsDrilldown: {
-    background: '#FAFAFA',
-    border: '1px solid #D9D9D9',
-    borderLeft: '3px solid #000',
+    background: '#f5f4ef',
+    border: `1px solid ${C.border}`,
+    borderLeft: `3px solid ${C.text}`,
+    borderRadius: '0 4px 4px 0',
     padding: 14,
     marginTop: 10,
     marginBottom: 14,
@@ -7216,7 +7504,7 @@ const styles = {
     alignItems: 'center',
     gap: 20,
     paddingBottom: 12,
-    borderBottom: '1px solid #E8E8E8',
+    borderBottom: `1px solid #ece9e3`,
     flexWrap: 'wrap',
   },
   accountsAiBox: {
@@ -7224,40 +7512,44 @@ const styles = {
     gap: 6,
     alignItems: 'center',
     padding: 10,
-    background: '#F2F2F2',
-    border: '1px solid #D9D9D9',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
     marginTop: 10,
   },
   accountsTable: {
-    background: '#fff',
-    border: '1px solid #E8E8E8',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
+    overflow: 'hidden',
   },
   accountsTableHead: {
     display: 'grid',
     gridTemplateColumns: '2fr 80px 110px 110px 120px 100px 30px',
     gap: 10,
     padding: '8px 12px',
-    background: '#F2F2F2',
+    background: '#f0efea',
     fontSize: '6.5pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#808080',
+    color: C.text3,
     fontWeight: 700,
-    borderBottom: '2px solid #808080',
+    borderBottom: `1px solid ${C.border}`,
   },
   accountRow: {
     display: 'grid',
     gridTemplateColumns: '2fr 80px 110px 110px 120px 100px 30px',
     gap: 10,
     padding: '10px 12px',
-    borderBottom: '1px solid #F2F2F2',
+    borderBottom: `1px solid ${C.bg}`,
     alignItems: 'center',
     fontSize: '8.5pt',
   },
   committedBadge: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
     border: 'none',
+    borderRadius: '3px',
     padding: '3px 8px',
     fontSize: '6pt',
     fontWeight: 700,
@@ -7265,9 +7557,10 @@ const styles = {
     cursor: 'pointer',
   },
   plannedBadge: {
-    background: '#fff',
-    color: '#000',
-    border: '1px solid #808080',
+    background: C.surface,
+    color: C.text2,
+    border: `1px solid ${C.borderStrong}`,
+    borderRadius: '3px',
     padding: '3px 8px',
     fontSize: '6pt',
     fontWeight: 700,
@@ -7281,161 +7574,63 @@ const styles = {
     background: 'transparent',
     border: 'none',
     cursor: 'pointer',
-    color: '#000',
+    color: C.text2,
     fontSize: '7pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     fontWeight: 600,
     padding: '2px 6px',
   },
-  goalCard: {
-    background: '#fff',
-    border: '1px solid #D9D9D9',
-    padding: 14,
-  },
-  goalEditBtn: {
-    background: 'transparent',
-    border: '1px solid #D9D9D9',
-    color: '#808080',
-    fontSize: '6.5pt',
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    padding: '3px 8px',
-    cursor: 'pointer',
-  },
-  whatIfPanel: {
-    background: '#FAFAFA',
-    border: '1px solid #D9D9D9',
-    borderLeft: '3px solid #000',
-    padding: 14,
-    marginBottom: 14,
-  },
-  whatIfHeader: {
-    display: 'flex',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingBottom: 8,
-    borderBottom: '1px solid #E8E8E8',
-  },
-  whatIfSliderRow: {
-    display: 'grid',
-    gridTemplateColumns: '160px 1fr 90px',
-    alignItems: 'center',
-    gap: 12,
-    padding: '8px 0',
-    borderBottom: '1px solid #F2F2F2',
-  },
-  whatIfLabel: {
-    fontSize: '8pt',
-    fontWeight: 600,
-  },
-  whatIfSlider: {
-    width: '100%',
-    WebkitAppearance: 'none',
-    appearance: 'none',
-    height: 4,
-    background: '#D9D9D9',
-    outline: 'none',
-    cursor: 'pointer',
-  },
-  whatIfValue: {
-    fontFamily: 'Lora, serif',
-    fontSize: '11pt',
-    fontWeight: 700,
-    textAlign: 'right',
-  },
-  whatIfDelta: {
-    fontSize: '6.5pt',
-    color: '#808080',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
-    textAlign: 'right',
-    marginTop: 2,
-  },
-  whatIfImpactRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 1,
-    background: '#D9D9D9',
-    border: '1px solid #808080',
-    marginTop: 12,
-  },
-  whatIfImpactCell: {
-    background: '#fff',
-    padding: '8px 10px',
-  },
-  quickGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(6, 1fr)',
-    gap: 8,
-  },
-  quickStat: {
-    padding: '10px 12px',
-    background: '#F8F8F8',
-    border: '1px solid #E8E8E8',
-  },
-  qsLabel: {
-    fontSize: '6.5pt',
-    textTransform: 'uppercase',
-    letterSpacing: '0.07em',
-    color: '#808080',
-    marginBottom: 3,
-  },
-  qsValue: {
-    fontFamily: 'Lora, serif',
-    fontSize: '14pt',
-    fontWeight: 700,
-    lineHeight: 1,
-  },
+
+  // ── Tables ──────────────────────────────────────────────────────
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    fontSize: '8.5pt',
+    fontSize: '9pt',
     marginBottom: 4,
+    background: C.surface,
+    border: `1px solid ${C.border}`,
   },
   th: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
-    padding: '7px 10px',
+    padding: '8px 12px',
     fontSize: '7.5pt',
     fontWeight: 600,
     textAlign: 'left',
-    border: '1px solid #000',
-    letterSpacing: '0.02em',
+    letterSpacing: '0.03em',
   },
   td: {
-    padding: '6px 10px',
-    border: '1px solid #D9D9D9',
-    background: '#fff',
+    padding: '7px 12px',
+    border: `1px solid ${C.border}`,
+    background: C.surface,
+    color: C.text,
   },
   tdBold: {
-    padding: '6px 10px',
-    border: '1px solid #D9D9D9',
+    padding: '7px 12px',
+    border: `1px solid ${C.border}`,
     fontWeight: 600,
+    color: C.text,
   },
   tdR: {
-    padding: '6px 10px',
-    border: '1px solid #D9D9D9',
+    padding: '7px 12px',
+    border: `1px solid ${C.border}`,
     textAlign: 'right',
     fontVariantNumeric: 'tabular-nums',
     whiteSpace: 'nowrap',
-    background: '#fff',
+    background: C.surface,
+    color: C.text,
   },
   tdDim: {
-    padding: '6px 10px',
-    border: '1px solid #D9D9D9',
-    color: '#404040',
-    fontSize: '8pt',
+    padding: '7px 12px',
+    border: `1px solid ${C.border}`,
+    color: C.text2,
+    fontSize: '8.5pt',
   },
-  subRow: {
-    background: '#E4E4E4',
-  },
-  totRow: {
-    background: '#D9D9D9',
-    fontWeight: 700,
-  },
+  subRow: { background: '#f0efea' },
+  totRow: { background: '#ece9e3', fontWeight: 700 },
+
+  // ── P&L Revenue Cards ──────────────────────────────────────────
   revGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
@@ -7443,64 +7638,64 @@ const styles = {
     marginBottom: 18,
   },
   revCard: {
-    background: '#fff',
-    border: '1px solid #D9D9D9',
-    padding: '14px 16px',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    padding: '16px 18px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   },
   revCardTitle: {
     fontSize: '7.5pt',
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#000',
-    marginBottom: 8,
-    paddingBottom: 6,
-    borderBottom: '1px solid #E8E8E8',
-  },
-  revMetric: {
+    color: C.text,
     marginBottom: 10,
+    paddingBottom: 7,
+    borderBottom: `1px solid ${C.border}`,
   },
+  revMetric: { marginBottom: 10 },
   revLabel: {
-    fontSize: '6.5pt',
+    fontSize: '7pt',
     textTransform: 'uppercase',
     letterSpacing: '0.07em',
-    color: '#808080',
+    color: C.text3,
     marginBottom: 2,
   },
   revValue: {
     fontFamily: 'Lora, serif',
-    fontSize: '13pt',
+    fontSize: '14pt',
     fontWeight: 700,
     lineHeight: 1,
+    color: C.text,
   },
-  revDetail: {
-    fontSize: '7.5pt',
-    color: '#404040',
-    marginTop: 2,
-  },
+  revDetail: { fontSize: '7.5pt', color: C.text2, marginTop: 2 },
   costSummary: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 1,
-    background: '#808080',
-    border: '1.5px solid #000',
+    gap: 8,
     marginTop: 14,
     marginBottom: 16,
   },
   csCell: {
-    background: '#fff',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
     padding: '12px 14px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   },
   csCellHighlight: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
+    border: `1px solid ${C.text}`,
+    borderRadius: '6px',
     padding: '12px 14px',
   },
   csLabel: {
     fontSize: '6.5pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#808080',
+    color: C.text3,
     marginBottom: 4,
   },
   csValue: {
@@ -7509,113 +7704,112 @@ const styles = {
     fontWeight: 700,
     lineHeight: 1,
   },
-  csDetail: {
-    fontSize: '7pt',
-    color: '#404040',
-    marginTop: 3,
-    fontStyle: 'italic',
-  },
+  csDetail: { fontSize: '7pt', color: C.text2, marginTop: 3, fontStyle: 'italic' },
   costBar: {
-    marginBottom: 12,
-    padding: '10px 12px',
-    background: '#fff',
-    border: '1px solid #D9D9D9',
-    borderLeft: '3px solid #000',
+    marginBottom: 10,
+    padding: '12px 14px',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderLeft: `3px solid ${C.text}`,
+    borderRadius: '0 6px 6px 0',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   },
-  costBarOver: {
-    borderLeftColor: '#404040',
-    background: '#FAFAFA',
-  },
+  costBarOver: { borderLeftColor: C.red },
   costBarHeader: {
     display: 'grid',
     gridTemplateColumns: '1fr auto auto auto',
     alignItems: 'baseline',
     gap: 12,
-    marginBottom: 6,
+    marginBottom: 7,
   },
   costBarLabel: {
-    fontSize: '8.5pt',
+    fontSize: '9pt',
     fontWeight: 700,
     display: 'flex',
     alignItems: 'center',
     gap: 6,
+    color: C.text,
   },
   statusTag: {
-    fontSize: '6pt',
+    fontSize: '6.5pt',
     textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    padding: '2px 6px',
-    borderRadius: 1,
+    letterSpacing: '0.07em',
+    padding: '2px 7px',
+    borderRadius: '3px',
     fontWeight: 700,
   },
   statusUnder: {
-    background: '#000',
-    color: '#fff',
+    background: C.greenBg,
+    color: C.green,
+    border: `1px solid ${C.greenBorder}`,
   },
   statusOver: {
-    background: '#fff',
-    color: '#000',
-    border: '1px solid #000',
+    background: C.redBg,
+    color: C.red,
+    border: `1px solid ${C.redBorder}`,
   },
   statusOnTrack: {
-    background: '#F2F2F2',
-    color: '#404040',
-    border: '1px solid #D9D9D9',
+    background: '#ece9e3',
+    color: C.text2,
+    border: `1px solid ${C.border}`,
   },
-  costBarSpend: {
-    fontSize: '7.5pt',
-    color: '#404040',
-  },
+  costBarSpend: { fontSize: '8pt', color: C.text2 },
   costBarVariance: {
     fontFamily: 'Lora, serif',
     fontSize: '11pt',
     fontWeight: 700,
+    color: C.text,
   },
   costBarTrack: {
-    background: '#F2F2F2',
-    height: 14,
-    border: '1px solid #D9D9D9',
-    overflow: 'visible',
+    background: '#ece9e3',
+    height: 8,
+    borderRadius: '4px',
+    overflow: 'hidden',
     position: 'relative',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   costBarFill: {
-    background: '#000',
+    background: C.text,
     height: '100%',
+    borderRadius: '4px',
     transition: 'width 0.6s ease',
   },
   costBarMark: {
     position: 'absolute',
-    top: -3,
-    bottom: -3,
-    width: 1.5,
-    background: '#000',
+    top: -2,
+    bottom: -2,
+    width: 2,
+    background: C.text2,
+    borderRadius: '1px',
   },
   costBarDriver: {
-    fontSize: '7.5pt',
-    color: '#404040',
+    fontSize: '8pt',
+    color: C.text2,
     lineHeight: 1.5,
-    paddingTop: 4,
-    borderTop: '1px dotted #E8E8E8',
+    paddingTop: 6,
+    borderTop: '1px solid #ece9e3',
   },
+
+  // ── Balance Sheet Grid ─────────────────────────────────────────
   miniGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 1,
-    background: '#808080',
-    border: '1px solid #808080',
+    gap: 8,
     marginBottom: 16,
   },
   miniMetric: {
-    background: '#fff',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
     padding: '12px 14px',
     textAlign: 'center',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   },
   mmLabel: {
-    fontSize: '6.5pt',
+    fontSize: '7pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#808080',
+    color: C.text3,
     marginBottom: 4,
   },
   mmValue: {
@@ -7623,24 +7817,26 @@ const styles = {
     fontSize: '15pt',
     fontWeight: 700,
     lineHeight: 1,
+    color: C.text,
   },
   leadGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: 1,
-    background: '#D9D9D9',
-    border: '1px solid #808080',
+    gap: 8,
     marginBottom: 16,
   },
   leadCell: {
-    background: '#fff',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
     padding: '14px 16px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   },
   llStyle: {
     fontSize: '7pt',
     textTransform: 'uppercase',
     letterSpacing: '0.09em',
-    color: '#808080',
+    color: C.text3,
     marginBottom: 4,
   },
   lvStyle: {
@@ -7648,224 +7844,206 @@ const styles = {
     fontSize: '17pt',
     fontWeight: 700,
     lineHeight: 1.05,
+    color: C.text,
   },
-  scenarioGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: 12,
-  },
+
+  // ── Risk & Scenarios ───────────────────────────────────────────
+  scenarioGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
   scenarioCard: {
-    border: '1px solid #D9D9D9',
-    padding: '14px',
-    background: '#fff',
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    padding: '16px',
+    background: C.surface,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
   },
-  scenarioBase: {
-    background: '#F2F2F2',
-    borderColor: '#808080',
-    borderWidth: 1.5,
-  },
+  scenarioBase: { background: '#f5f4ef', borderColor: C.borderStrong },
   scenarioHeader: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
     marginBottom: 10,
     paddingBottom: 8,
-    borderBottom: '1px solid #E8E8E8',
+    borderBottom: '1px solid #ece9e3',
   },
-  scenarioIcon: {
-    width: 16,
-    height: 16,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
+  scenarioIcon: { width: 16, height: 16, borderRadius: '50%', flexShrink: 0 },
   scenarioTitle: {
     fontSize: '8.5pt',
     fontWeight: 700,
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     flex: 1,
+    color: C.text,
   },
-  scenarioInputs: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 8,
-    marginBottom: 8,
-  },
+  scenarioInputs: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 },
   scenarioInput: {
-    background: '#F8F8F8',
-    padding: '6px 8px',
-    border: '1px solid #E8E8E8',
+    background: '#f5f4ef',
+    borderRadius: '4px',
+    padding: '7px 9px',
+    border: `1px solid ${C.border}`,
   },
   scLabel: {
     display: 'block',
     fontSize: '6.5pt',
     textTransform: 'uppercase',
     letterSpacing: '0.06em',
-    color: '#808080',
+    color: C.text3,
     marginBottom: 2,
   },
   heatmap: {
     display: 'grid',
     gridTemplateColumns: '60px repeat(3, 1fr)',
     gridTemplateRows: 'repeat(4, 50px)',
-    gap: 1,
-    background: '#D9D9D9',
-    border: '1px solid #808080',
+    gap: 2,
+    background: C.border,
+    border: `1px solid ${C.border}`,
+    borderRadius: '6px',
+    overflow: 'hidden',
     marginBottom: 16,
   },
   hmLabel: {
-    background: '#F2F2F2',
+    background: '#f0efea',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '7pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#808080',
+    color: C.text3,
     fontWeight: 600,
   },
-  hmCell: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'column',
-    padding: 4,
-  },
+  hmCell: { display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: 4 },
+
+  // ── Action items (risk view) ───────────────────────────────────
   actionItem: {
-    background: '#fff',
-    border: '1px solid #D9D9D9',
-    borderLeft: '3px solid #000',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderLeft: `3px solid ${C.text}`,
+    borderRadius: '0 6px 6px 0',
     padding: '10px 14px',
     marginBottom: 8,
     display: 'flex',
     gap: 12,
     alignItems: 'flex-start',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
   },
   aiNumStyle: {
     fontSize: '8.5pt',
     fontWeight: 700,
-    background: '#000',
+    background: C.text,
     color: '#fff',
     width: 24,
     height: 24,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 2,
+    borderRadius: '4px',
     flexShrink: 0,
   },
-  aiTitle: {
-    fontSize: '9pt',
-    fontWeight: 600,
-    marginBottom: 4,
-  },
-  aiDesc: {
-    fontSize: '8pt',
-    color: '#404040',
-    lineHeight: 1.5,
-  },
-  aiTag: {
-    fontSize: '7pt',
-  },
+  aiTitle: { fontSize: '9pt', fontWeight: 600, marginBottom: 4, color: C.text },
+  aiDesc: { fontSize: '8.5pt', color: C.text2, lineHeight: 1.5 },
+  aiTag: { fontSize: '7pt' },
   aiPriorityLabel: {
-    fontSize: '6pt',
+    fontSize: '6.5pt',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
-    color: '#808080',
+    color: C.text3,
   },
   aiPriorityScore: {
     fontFamily: 'Lora, serif',
     fontSize: '14pt',
     fontWeight: 700,
+    color: C.text,
   },
   filterBtn: {
-    fontSize: '7pt',
-    padding: '4px 10px',
-    border: '1px solid #D9D9D9',
-    background: '#fff',
+    fontSize: '7.5pt',
+    padding: '5px 10px',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
+    background: C.surface,
     cursor: 'pointer',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     fontWeight: 600,
-    color: '#404040',
+    color: C.text2,
+    transition: 'all 0.12s ease',
   },
-  filterBtnActive: {
-    background: '#000',
-    color: '#fff',
-    borderColor: '#000',
-  },
+  filterBtnActive: { background: C.text, color: '#fff', borderColor: C.text },
   select: {
     fontFamily: 'inherit',
-    fontSize: 'inherit',
-    padding: '2px 4px',
-    border: '1px solid #D9D9D9',
-    background: '#fff',
+    fontSize: '9pt',
+    padding: '5px 8px',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
+    background: C.surface,
     cursor: 'pointer',
     outline: 'none',
+    color: C.text,
   },
   miniBtn: {
     background: 'transparent',
     border: 'none',
     cursor: 'pointer',
-    color: '#808080',
+    color: C.text3,
     fontSize: '14pt',
     padding: '0 4px',
     lineHeight: 1,
   },
+
+  // ── Buttons ────────────────────────────────────────────────────
   btnPrimary: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
     border: 'none',
-    padding: '8px 18px',
+    padding: '8px 16px',
     cursor: 'pointer',
     fontFamily: 'inherit',
     fontSize: '8.5pt',
     fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    borderRadius: '4px',
+    letterSpacing: '0.02em',
+    transition: 'opacity 0.15s ease',
   },
   btnSecondary: {
-    background: '#fff',
-    color: '#000',
-    border: '1.5px solid #000',
-    padding: '7px 16px',
+    background: C.surface,
+    color: C.text,
+    border: `1px solid ${C.borderStrong}`,
+    padding: '7px 14px',
     cursor: 'pointer',
     fontFamily: 'inherit',
-    fontSize: '8pt',
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    fontSize: '8.5pt',
+    fontWeight: 500,
+    borderRadius: '4px',
+    transition: 'all 0.12s ease',
   },
   btnDanger: {
-    background: '#000',
+    background: C.red,
     color: '#fff',
-    border: '1.5px solid #000',
-    padding: '8px 18px',
+    border: 'none',
+    padding: '8px 16px',
     cursor: 'pointer',
     fontFamily: 'inherit',
     fontSize: '8.5pt',
     fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    borderRadius: '4px',
   },
   btnGhost: {
     background: 'transparent',
-    color: '#404040',
-    border: '1px solid #D9D9D9',
-    padding: '4px 10px',
+    color: C.text2,
+    border: `1px solid ${C.border}`,
+    padding: '5px 10px',
     cursor: 'pointer',
     fontFamily: 'inherit',
-    fontSize: '7pt',
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    fontSize: '8pt',
+    borderRadius: '4px',
+    transition: 'all 0.12s ease',
   },
   aiFab: {
     position: 'fixed',
     right: 24,
     bottom: 24,
-    width: 56,
-    height: 56,
-    background: '#000',
+    width: 52,
+    height: 52,
+    background: C.text,
     color: '#fff',
     borderRadius: '50%',
     border: 'none',
@@ -7873,141 +8051,159 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
     zIndex: 90,
+    transition: 'transform 0.15s ease',
   },
+
+  // ── AI Panel ───────────────────────────────────────────────────
   aiPanel: {
     position: 'fixed',
     right: 24,
     bottom: 24,
-    width: 420,
-    height: 600,
+    width: 400,
+    height: 580,
     maxHeight: 'calc(100vh - 48px)',
-    background: '#fff',
-    border: '1.5px solid #000',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '12px',
+    boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
     zIndex: 100,
     display: 'flex',
     flexDirection: 'column',
+    overflow: 'hidden',
+    animation: 'slideDown 0.2s ease',
   },
   aiHeader: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
     padding: '14px 18px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderRadius: '12px 12px 0 0',
   },
   aiIconHeader: {
     width: 30,
     height: 30,
-    background: '#fff',
-    color: '#000',
+    background: 'rgba(255,255,255,0.15)',
+    color: '#fff',
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontFamily: 'Lora, serif',
     fontWeight: 700,
-    fontSize: '14pt',
+    fontSize: '13pt',
+    border: '1px solid rgba(255,255,255,0.2)',
   },
   aiClose: {
     background: 'transparent',
     border: 'none',
-    color: '#fff',
+    color: 'rgba(255,255,255,0.7)',
     cursor: 'pointer',
     fontSize: '20pt',
     lineHeight: 1,
     padding: '0 4px',
-    opacity: 0.7,
   },
   aiMessages: {
     flex: 1,
     overflowY: 'auto',
-    padding: '16px 18px',
-    background: '#FAFAFA',
+    padding: '14px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    background: '#fafaf8',
   },
   aiMsgUser: {
-    background: '#000',
+    alignSelf: 'flex-end',
+    background: C.text,
     color: '#fff',
-    padding: '10px 14px',
-    borderRadius: '14px 14px 2px 14px',
-    marginLeft: 50,
-    marginBottom: 10,
-    fontSize: '8.5pt',
+    padding: '9px 14px',
+    borderRadius: '12px 12px 2px 12px',
+    fontSize: '9pt',
+    maxWidth: '85%',
+    lineHeight: 1.5,
   },
   aiMsgAssistant: {
-    background: '#fff',
-    border: '1px solid #D9D9D9',
+    alignSelf: 'flex-start',
+    background: C.surface,
+    border: `1px solid ${C.border}`,
     padding: '10px 14px',
-    borderRadius: '2px 14px 14px 14px',
-    marginRight: 50,
-    marginBottom: 10,
-    fontSize: '8.5pt',
+    borderRadius: '2px 12px 12px 12px',
+    fontSize: '9pt',
+    maxWidth: '90%',
     lineHeight: 1.55,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
   },
-  aiLoadingRow: {
-    padding: '10px 14px',
-    marginRight: 50,
-    display: 'flex',
-    alignItems: 'center',
-  },
+  aiLoadingRow: { display: 'flex', alignItems: 'center', padding: '6px 0' },
   aiSuggestion: {
-    fontSize: '7.5pt',
+    display: 'inline-block',
     padding: '5px 10px',
-    background: '#F2F2F2',
-    border: '1px solid #D9D9D9',
-    borderRadius: 14,
+    background: C.surface,
+    border: `1px solid ${C.border}`,
+    borderRadius: '16px',
+    fontSize: '8pt',
     cursor: 'pointer',
+    color: C.text2,
+    transition: 'all 0.12s ease',
   },
   aiInputRow: {
-    padding: '12px 16px',
-    background: '#fff',
-    borderTop: '1px solid #D9D9D9',
+    padding: '12px 14px',
+    background: C.surface,
+    borderTop: `1px solid ${C.border}`,
     display: 'flex',
     gap: 8,
   },
   aiInput: {
     flex: 1,
-    border: '1px solid #D9D9D9',
+    border: `1px solid ${C.border}`,
+    borderRadius: '4px',
     padding: '8px 12px',
     fontFamily: 'inherit',
     fontSize: '9pt',
     outline: 'none',
+    background: '#fafaf8',
+    color: C.text,
   },
   aiSend: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
     border: 'none',
     cursor: 'pointer',
-    padding: '8px 16px',
+    padding: '8px 14px',
     fontFamily: 'inherit',
-    fontSize: '8pt',
+    fontSize: '8.5pt',
     fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: '0.06em',
+    borderRadius: '4px',
   },
+
+  // ── Modal ──────────────────────────────────────────────────────
   modalOverlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0,0,0,0.55)',
+    background: 'rgba(0,0,0,0.45)',
     zIndex: 200,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
+    animation: 'fadeIn 0.18s ease',
+    backdropFilter: 'blur(2px)',
   },
   modal: {
-    background: '#fff',
+    background: C.surface,
     width: '100%',
     maxWidth: 520,
-    border: '1.5px solid #000',
-    boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+    borderRadius: '10px',
+    boxShadow: '0 24px 64px rgba(0,0,0,0.2)',
+    animation: 'slideDown 0.2s ease',
+    overflow: 'hidden',
   },
   modalHeader: {
-    background: '#000',
+    background: C.text,
     color: '#fff',
-    padding: '14px 22px',
+    padding: '15px 22px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -8015,26 +8211,12 @@ const styles = {
   modalClose: {
     background: 'transparent',
     border: 'none',
-    color: '#fff',
+    color: 'rgba(255,255,255,0.7)',
     fontSize: '20pt',
     cursor: 'pointer',
     lineHeight: 1,
     padding: '0 4px',
-    opacity: 0.7,
   },
 };
 
-// Add keyframe animation
-if (typeof document !== 'undefined' && !document.getElementById('cockpit-keyframes')) {
-  const style = document.createElement('style');
-  style.id = 'cockpit-keyframes';
-  style.textContent = `
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
-    @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700&family=DM+Sans:wght@300;400;500;600&display=swap');
-    body { font-family: 'DM Sans', Arial, sans-serif; }
-    input[type="number"]::-webkit-inner-spin-button { display: none; }
-    input[type="number"] { -moz-appearance: textfield; }
-  `;
-  document.head.appendChild(style);
-}
+// Keyframes and base styles are now handled in index.css
