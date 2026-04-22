@@ -839,7 +839,7 @@ function EditableValue({ value, onChange, type = 'number', prefix = '', suffix =
         padding: '1px 2px',
         display: 'inline-block',
       }}
-      onMouseEnter={(e) => { e.target.style.borderBottomColor = '#808080'; e.target.style.background = '#F8F8F8'; }}
+      onMouseEnter={(e) => { e.target.style.borderBottomColor = C.borderStrong; e.target.style.background = '#f5f4ef'; }}
       onMouseLeave={(e) => { e.target.style.borderBottomColor = 'transparent'; e.target.style.background = 'transparent'; }}
     >
       {prefix}{displayValue}{suffix}
@@ -1757,47 +1757,47 @@ function Dashboard({ data, save, insight, insightLoading, regenerateInsight, cur
           {/* Revenue */}
           <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 600, borderTop: `1px solid ${C.border}` }}>Total Revenue</div>
           {forecastSummary.revenue.map((v, i) => (
-            <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: `1px solid ${C.border}`, borderLeft: '1px solid #E8E8E8' }}>
+            <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: `1px solid ${C.border}`, borderLeft: `1px solid ${C.border}` }}>
               {fmt(v)}
             </div>
           ))}
-          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#F2F2F2', borderTop: `1px solid ${C.border}` }}>
+          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#f5f4ef', borderTop: `1px solid ${C.border}` }}>
             {fmt(forecastSummary.totalRev)}
           </div>
 
           {/* Costs */}
-          <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 600, borderTop: '1px solid #E8E8E8' }}>Total Costs</div>
+          <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 600, borderTop: `1px solid ${C.border}` }}>Total Costs</div>
           {forecastSummary.costs.map((v, i) => (
-            <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: '1px solid #E8E8E8', borderLeft: '1px solid #E8E8E8' }}>
+            <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: `1px solid ${C.border}`, borderLeft: `1px solid ${C.border}` }}>
               {fmt(v)}
             </div>
           ))}
-          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#F2F2F2', borderTop: '1px solid #E8E8E8' }}>
+          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#f5f4ef', borderTop: `1px solid ${C.border}` }}>
             {fmt(forecastSummary.totalCost)}
           </div>
 
           {/* Net */}
-          <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 700, borderTop: '1px solid #000', background: '#F2F2F2' }}>Net Income</div>
+          <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 700, borderTop: `1.5px solid ${C.borderStrong}`, background: '#f5f4ef' }}>Net Income</div>
           {forecastSummary.revenue.map((v, i) => {
             const net = v - forecastSummary.costs[i];
             return (
-              <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: '1px solid #000', borderLeft: '1px solid #E8E8E8', background: '#F2F2F2' }}>
+              <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: `1.5px solid ${C.borderStrong}`, borderLeft: `1px solid ${C.border}`, background: '#f5f4ef' }}>
                 {fmt(net)}
               </div>
             );
           })}
-          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#D9D9D9', borderTop: '1px solid #000' }}>
+          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#D9D9D9', borderTop: `1.5px solid ${C.borderStrong}` }}>
             {fmt(forecastSummary.totalRev - forecastSummary.totalCost)}
           </div>
 
           {/* Cash */}
-          <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 600, borderTop: '1px solid #E8E8E8' }}>Ending Cash</div>
+          <div style={{ padding: '10px 12px', fontSize: '8.5pt', fontWeight: 600, borderTop: `1px solid ${C.border}` }}>Ending Cash</div>
           {forecastSummary.cash.map((v, i) => (
-            <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: '1px solid #E8E8E8', borderLeft: '1px solid #E8E8E8' }}>
+            <div key={i} style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', borderTop: `1px solid ${C.border}`, borderLeft: `1px solid ${C.border}` }}>
               {fmt(v, 1)}
             </div>
           ))}
-          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#F2F2F2', borderTop: '1px solid #E8E8E8' }}>
+          <div style={{ padding: '10px 12px', fontSize: '10pt', fontFamily: 'Lora, serif', fontWeight: 700, textAlign: 'right', background: '#f5f4ef', borderTop: `1px solid ${C.border}` }}>
             EOP
           </div>
         </div>
@@ -2287,7 +2287,7 @@ function CategoryAccountsDrilldown({ bucket, accounts, data, save, currentMonthS
                     {values.map((v, i) => (
                       <td key={i} style={styles.tdR}>{v > 0 ? fmt(v, 1) : <span style={{ color: '#D9D9D9' }}>—</span>}</td>
                     ))}
-                    <td style={{ ...styles.tdR, background: '#F2F2F2', fontWeight: 700 }}>{fmt(total, 1)}</td>
+                    <td style={{ ...styles.tdR, background: '#f5f4ef', fontWeight: 700 }}>{fmt(total, 1)}</td>
                   </tr>
                 );
               })}
@@ -3140,7 +3140,7 @@ function PnlForecastTab({ data, save }) {
           return (
             <React.Fragment key={groupKey + ':' + h.key}>
               {/* Header row (clickable to expand/collapse) */}
-              <tr style={{ background: '#F2F2F2', cursor: 'pointer' }} onClick={() => toggleHeader(groupKey + ':' + h.key)}>
+              <tr style={{ background: '#f5f4ef', cursor: 'pointer' }} onClick={() => toggleHeader(groupKey + ':' + h.key)}>
                 <td style={{ ...styles.td, fontWeight: 700 }} colSpan={2}>
                   <span style={{ marginRight: 6, fontFamily: 'Lora, serif', display: 'inline-block', width: 12 }}>{isHdrExpanded ? '▼' : '▶'}</span>
                   {h.label} <span style={{ fontWeight: 400, color: C.text2, fontSize: '7.5pt' }}>({header.accounts.length} accounts)</span>
@@ -3811,7 +3811,7 @@ function ThreeWayTab({ model, computed, data }) {
       </div>
 
       {/* Three-way tabs */}
-      <div style={{ display: 'flex', gap: 1, background: '#D9D9D9', border: '1px solid #808080', marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 2, background: '#ece9e3', border: `1px solid ${C.border}`, borderRadius: '6px', padding: '3px', marginBottom: 14 }}>
         {[
           { id: 'pl', label: 'Profit & Loss' },
           { id: 'bs', label: 'Balance Sheet' },
@@ -3822,16 +3822,17 @@ function ThreeWayTab({ model, computed, data }) {
             onClick={() => setView(t.id)}
             style={{
               flex: 1,
-              padding: '10px 14px',
-              background: view === t.id ? '#000' : '#fff',
-              color: view === t.id ? '#fff' : '#000',
+              padding: '9px 14px',
+              background: view === t.id ? '#fff' : 'transparent',
+              color: view === t.id ? C.text : C.text2,
               border: 'none',
               cursor: 'pointer',
               fontFamily: 'Lora, serif',
               fontSize: '10pt',
               fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
+              borderRadius: '4px',
+              boxShadow: view === t.id ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.12s ease',
             }}
           >
             {t.label}
@@ -3856,8 +3857,9 @@ function ThreeWayTab({ model, computed, data }) {
               if (row.heading) return (
                 <tr key={`h${idx}`}>
                   <td colSpan={model.periods.length + 2} style={{
-                    ...styles.td, background: '#F2F2F2', fontSize: '7.5pt', textTransform: 'uppercase',
-                    letterSpacing: '0.08em', fontWeight: 700, padding: '6px 10px', borderTop: '1px solid #808080',
+                    ...styles.td, background: '#ece9e3', fontSize: '7.5pt', textTransform: 'uppercase',
+                    letterSpacing: '0.08em', fontWeight: 700, padding: '6px 10px', borderTop: `1px solid ${C.border}`,
+                    color: C.text2,
                   }}>{row.heading}</td>
                 </tr>
               );
@@ -3868,9 +3870,9 @@ function ThreeWayTab({ model, computed, data }) {
                 : values.reduce((s, v) => s + v, 0);
 
               const rowStyle = {
-                ...(row.highlight ? { background: '#F2F2F2' } : {}),
+                ...(row.highlight ? { background: '#f5f4ef' } : {}),
                 ...(row.bold ? { fontWeight: 700 } : {}),
-                ...(row.underline ? { borderTop: '1px solid #808080' } : {}),
+                ...(row.underline ? { borderTop: `1.5px solid ${C.borderStrong}` } : {}),
               };
 
               const formatVal = (v) => {
@@ -3886,14 +3888,14 @@ function ThreeWayTab({ model, computed, data }) {
                     paddingLeft: row.indent ? 20 : 10,
                     fontWeight: row.bold ? 700 : 400,
                     position: 'sticky', left: 0, zIndex: 1,
-                    background: row.highlight ? '#F2F2F2' : '#fff',
+                    background: row.highlight ? '#f5f4ef' : C.surface,
                   }}>{row.label}</td>
                   {values.map((v, i) => (
-                    <td key={i} style={{ ...styles.tdR, background: row.highlight ? '#F2F2F2' : '#fff' }}>
+                    <td key={i} style={{ ...styles.tdR, background: row.highlight ? '#f5f4ef' : C.surface }}>
                       {formatVal(v)}
                     </td>
                   ))}
-                  <td style={{ ...styles.tdR, background: '#F2F2F2', fontWeight: 700 }}>
+                  <td style={{ ...styles.tdR, background: '#f5f4ef', fontWeight: 700 }}>
                     {formatVal(total)}
                   </td>
                 </tr>
@@ -4008,8 +4010,8 @@ function ScenarioCompareTab({ model, allScenarios, updateModel, data }) {
                 fmt(v);
 
               return (
-                <tr key={s.id} style={s.id === model.activeScenario ? { background: '#F2F2F2' } : {}}>
-                  <td style={{ ...styles.td, position: 'sticky', left: 0, background: s.id === model.activeScenario ? '#F2F2F2' : '#fff', zIndex: 1 }}>
+                <tr key={s.id} style={s.id === model.activeScenario ? { background: '#f5f4ef' } : {}}>
+                  <td style={{ ...styles.td, position: 'sticky', left: 0, background: s.id === model.activeScenario ? '#f5f4ef' : C.surface, zIndex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ width: 10, height: 10, borderRadius: '50%', background: s.color }}></span>
                       <div>
@@ -4021,7 +4023,7 @@ function ScenarioCompareTab({ model, allScenarios, updateModel, data }) {
                   {values.map((v, i) => (
                     <td key={i} style={styles.tdR}>{formatVal(v)}</td>
                   ))}
-                  <td style={{ ...styles.tdR, background: '#F2F2F2', fontWeight: 700 }}>{formatVal(total)}</td>
+                  <td style={{ ...styles.tdR, background: '#f5f4ef', fontWeight: 700 }}>{formatVal(total)}</td>
                 </tr>
               );
             })}
@@ -4034,7 +4036,7 @@ function ScenarioCompareTab({ model, allScenarios, updateModel, data }) {
         <SubsectionHeader num="4D" title="Manage Scenarios" />
         <div style={styles.scenarioGrid}>
           {model.scenarios.map((s) => (
-            <div key={s.id} style={{ ...styles.scenarioCardV2, ...(s.id === model.activeScenario ? { borderWidth: 1.5, borderColor: '#000' } : {}) }}>
+            <div key={s.id} style={{ ...styles.scenarioCardV2, ...(s.id === model.activeScenario ? { borderWidth: 2, borderColor: C.text } : {}) }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <span style={{ width: 12, height: 12, borderRadius: '50%', background: s.color, flexShrink: 0 }}></span>
                 <div style={{ flex: 1 }}>
@@ -4103,7 +4105,7 @@ function ScenarioOverrideEditor({ scenario, drivers, onAdd }) {
   const [value, setValue] = useState(1);
 
   return (
-    <div style={{ marginTop: 8, padding: 10, background: '#F2F2F2', border: `1px solid ${C.border}` }}>
+    <div style={{ marginTop: 8, padding: 10, background: '#f5f4ef', border: `1px solid ${C.border}` }}>
       <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, marginBottom: 6 }}>
         Add Override
       </div>
@@ -4548,7 +4550,7 @@ Example response: m_cash_balance - (m_total_costs * 2)`;
           </div>
 
           {/* AI Formula generator */}
-          <div style={{ marginTop: 16, padding: 12, background: '#F2F2F2', border: `1px solid ${C.border}` }}>
+          <div style={{ marginTop: 16, padding: 12, background: '#f5f4ef', border: `1px solid ${C.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <span style={{ width: 20, height: 20, background: '#000', color: '#fff', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Lora, serif', fontSize: '9pt', fontWeight: 700 }}>M</span>
               <span style={{ fontSize: '8pt', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>AI Formula Builder</span>
@@ -4595,7 +4597,7 @@ Example response: m_cash_balance - (m_total_costs * 2)`;
 
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: '8pt', fontWeight: 600, marginBottom: 4 }}>Drivers</div>
-            <div style={{ maxHeight: 120, overflowY: 'auto', border: '1px solid #E8E8E8', padding: 4 }}>
+            <div style={{ maxHeight: 120, overflowY: 'auto', border: `1px solid ${C.border}`, padding: 4 }}>
               {model.drivers.map((d) => (
                 <div key={d.id} onClick={() => insertAtCursor(d.id)} style={styles.pickerRow}>
                   <span style={{ fontSize: '7pt', color: C.text2 }}>d_</span>
@@ -4607,7 +4609,7 @@ Example response: m_cash_balance - (m_total_costs * 2)`;
 
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: '8pt', fontWeight: 600, marginBottom: 4 }}>Metrics</div>
-            <div style={{ maxHeight: 120, overflowY: 'auto', border: '1px solid #E8E8E8', padding: 4 }}>
+            <div style={{ maxHeight: 120, overflowY: 'auto', border: `1px solid ${C.border}`, padding: 4 }}>
               {model.metrics.map((m) => (
                 <div key={m.id} style={styles.pickerRow}>
                   <span onClick={() => insertAtCursor(m.id)} style={{ flex: 1, display: 'flex', gap: 4 }}>
@@ -5190,7 +5192,7 @@ function TodayView({ overdue, dueToday, inProgress, upNext, onSelect, onUpdate, 
       )}
 
       {overdue.length === 0 && dueToday.length === 0 && inProgress.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', background: '#F2F2F2', border: `1px solid ${C.border}` }}>
+        <div style={{ padding: 40, textAlign: 'center', background: '#f5f4ef', border: `1px solid ${C.border}` }}>
           <div style={{ fontFamily: 'Lora, serif', fontSize: '16pt', fontWeight: 700, marginBottom: 6 }}>You're clear</div>
           <div style={{ fontSize: '9pt', color: C.text2 }}>Nothing overdue or urgent. Use this time for strategic work.</div>
         </div>
@@ -5317,21 +5319,21 @@ function WeekView({ actions, onSelect, selectedId, onUpdate, today }) {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, background: '#D9D9D9', border: '1px solid #808080' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
         {days.map((d, i) => {
           const isToday = i === 0;
           const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
           const dayNum = d.getDate();
           const items = byDay[i];
           return (
-            <div key={i} style={{ background: isToday ? '#F2F2F2' : '#fff', minHeight: 200, padding: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, paddingBottom: 4, borderBottom: isToday ? '2px solid #000' : '1px solid #E8E8E8' }}>
+            <div key={i} style={{ background: isToday ? '#f5f4ef' : C.surface, border: `1px solid ${isToday ? C.borderStrong : C.border}`, borderRadius: '6px', minHeight: 200, padding: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, paddingBottom: 4, borderBottom: `1.5px solid ${isToday ? C.text : C.border}` }}>
                 <div>
-                  <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.08em', fontWeight: isToday ? 700 : 500 }}>{dayName}</div>
+                  <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: isToday ? C.text : C.text2, letterSpacing: '0.08em', fontWeight: isToday ? 700 : 500 }}>{dayName}</div>
                   <div style={{ fontFamily: 'Lora, serif', fontSize: '14pt', fontWeight: 700, lineHeight: 1 }}>{dayNum}</div>
                 </div>
                 {items.length > 0 && (
-                  <div style={{ fontSize: '7pt', color: C.text2 }}>{items.length}</div>
+                  <div style={{ fontSize: '7pt', color: C.text2, background: '#ece9e3', borderRadius: '10px', padding: '1px 6px' }}>{items.length}</div>
                 )}
               </div>
               {items.map((a) => (
@@ -5341,9 +5343,10 @@ function WeekView({ actions, onSelect, selectedId, onUpdate, today }) {
                   style={{
                     fontSize: '7.5pt',
                     padding: '5px 7px',
-                    background: selectedId === a.id ? '#000' : '#fff',
-                    color: selectedId === a.id ? '#fff' : '#000',
-                    border: '1px solid ' + (selectedId === a.id ? '#000' : '#D9D9D9'),
+                    background: selectedId === a.id ? C.text : C.surface,
+                    color: selectedId === a.id ? '#fff' : C.text,
+                    border: `1px solid ${selectedId === a.id ? C.text : C.border}`,
+                    borderRadius: '4px',
                     marginBottom: 4,
                     cursor: 'pointer',
                     lineHeight: 1.3,
@@ -5487,7 +5490,7 @@ function TimelineView({ actions, onSelect, selectedId, today }) {
       </div>
 
       {visible.length === 0 && (
-        <div style={{ padding: 30, textAlign: 'center', background: '#F2F2F2', border: `1px solid ${C.border}`, fontSize: '8.5pt', color: C.text2 }}>
+        <div style={{ padding: 30, textAlign: 'center', background: '#f5f4ef', border: `1px solid ${C.border}`, fontSize: '8.5pt', color: C.text2 }}>
           No actions in this window
         </div>
       )}
@@ -5512,7 +5515,7 @@ function StrategicView({ actions, onSelect, selectedId, onUpdate }) {
       <div style={{ marginBottom: 10 }}>
         <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700 }}>{title}</div>
         <div style={{ fontSize: '7.5pt', color: C.text2, fontStyle: 'italic', marginTop: 2 }}>{subtitle}</div>
-        <div style={{ fontSize: '7.5pt', color: C.text2, marginTop: 4, padding: '4px 8px', background: '#F2F2F2', borderLeft: '2px solid ' + accent }}>
+        <div style={{ fontSize: '7.5pt', color: C.text2, marginTop: 4, padding: '4px 8px', background: '#f5f4ef', borderLeft: '2px solid ' + accent }}>
           {recommendation}
         </div>
       </div>
@@ -5644,7 +5647,7 @@ function ActionDetail({ action, data, isMobile, onUpdate, onUpdateFull, onDelete
         </div>
 
         {/* Description */}
-        <div style={{ fontSize: '8.5pt', color: C.text2, lineHeight: 1.5, marginBottom: 12, padding: 8, background: '#f5f4ef', border: '1px solid #E8E8E8' }}>
+        <div style={{ fontSize: '8.5pt', color: C.text2, lineHeight: 1.5, marginBottom: 12, padding: 8, background: '#f5f4ef', border: `1px solid ${C.border}` }}>
           <EditableValue type="text" value={a.description} onChange={(v) => onUpdate('description', v)} />
         </div>
 
@@ -5896,14 +5899,14 @@ function MasterChartOfAccountsEditor({ data, save }) {
     const isExpanded = expandedHeaders[k];
     return (
       <React.Fragment key={k}>
-        <tr style={{ background: '#F2F2F2', fontWeight: 700, cursor: 'pointer' }} onClick={() => toggleHeader(groupKey, headerKey)}>
+        <tr style={{ background: '#f5f4ef', fontWeight: 700, cursor: 'pointer' }} onClick={() => toggleHeader(groupKey, headerKey)}>
           <td style={{ ...styles.td, fontWeight: 700 }} colSpan={2}>
             <span style={{ marginRight: 6, fontFamily: 'Lora, serif' }}>{isExpanded ? '▼' : '▶'}</span>
             {label} <span style={{ fontWeight: 400, color: C.text2, fontSize: '7.5pt' }}>({(accounts || []).length})</span>
           </td>
           {visibleMonths.map((m) => {
             const total = accountsTotalForMonth(accounts, m);
-            return <td key={m} style={{ ...styles.tdR, fontWeight: 700, background: '#E8E8E8' }}>{fmt(total, 0)}</td>;
+            return <td key={m} style={{ ...styles.tdR, fontWeight: 700, background: '#ece9e3' }}>{fmt(total, 0)}</td>;
           })}
           <td style={styles.td}></td>
         </tr>
@@ -6361,7 +6364,7 @@ function AiPanel({ messages, input, setInput, loading, onSend, onClose, dataCont
       </div>
 
       {messages.length <= 2 && (
-        <div style={{ padding: '10px 16px', display: 'flex', flexWrap: 'wrap', gap: 6, borderTop: '1px solid #E8E8E8' }}>
+        <div style={{ padding: '10px 16px', display: 'flex', flexWrap: 'wrap', gap: 6, borderTop: `1px solid ${C.border}` }}>
           {suggestions.map((s, i) => (
             <div key={i} onClick={() => onSend(s)} style={styles.aiSuggestion}>{s}</div>
           ))}
