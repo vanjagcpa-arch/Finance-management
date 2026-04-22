@@ -2403,7 +2403,7 @@ function ProfitLoss({ data, save, currentMonth, netIncome, budgetNet, forecastCo
         const projNet = projRev - projCost;
         const revChange = projRev - currentMonth.revenue;
         return (
-          <div style={{ background: '#F2F2F2', border: `1px solid ${C.border}`, borderLeft: '3px solid #000', padding: '10px 14px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: 20, alignItems: 'center' }}>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.text}`, padding: '10px 14px', marginBottom: 14, display: 'grid', gridTemplateColumns: 'auto 1fr auto auto auto', gap: 20, alignItems: 'center', borderRadius: '0 6px 6px 0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2, fontWeight: 700 }}>Next Month Forecast</div>
             <div style={{ fontSize: '8pt', color: C.text2 }}>
               {monthLabel(nextPeriod)} · <strong>{activeScenario?.name || 'Base'}</strong> scenario · Computed from driver model
@@ -2411,7 +2411,7 @@ function ProfitLoss({ data, save, currentMonth, netIncome, budgetNet, forecastCo
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>Revenue</div>
               <div style={{ fontFamily: 'Lora, serif', fontSize: '12pt', fontWeight: 700 }}>{fmt(projRev)}</div>
-              <div style={{ fontSize: '6.5pt', color: revChange >= 0 ? '#000' : '#808080' }}>{revChange >= 0 ? '↑' : '↓'} {fmt(Math.abs(revChange))} vs actual</div>
+              <div style={{ fontSize: '6.5pt', color: revChange >= 0 ? C.green : C.red }}>{revChange >= 0 ? '↑' : '↓'} {fmt(Math.abs(revChange))} vs actual</div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>Costs</div>
@@ -2419,7 +2419,7 @@ function ProfitLoss({ data, save, currentMonth, netIncome, budgetNet, forecastCo
             </div>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>Net Income</div>
-              <div style={{ fontFamily: 'Lora, serif', fontSize: '12pt', fontWeight: 700, color: projNet >= 0 ? '#000' : '#404040' }}>{fmt(projNet)}</div>
+              <div style={{ fontFamily: 'Lora, serif', fontSize: '12pt', fontWeight: 700, color: projNet >= 0 ? C.green : C.red }}>{fmt(projNet)}</div>
             </div>
           </div>
         );
@@ -2688,8 +2688,8 @@ function CostBar({ cat, data, save, currentMonthStr, forecastPeriods, onUpdate, 
         <div style={styles.costBarSpend}>
           <EditableValue value={cat.actual} onChange={(v) => onUpdate('actual', v)} isCurrency /> of <EditableValue value={cat.budget} onChange={(v) => onUpdate('budget', v)} isCurrency />
         </div>
-        <div style={{ ...styles.costBarVariance, color: variance < 0 ? '#000' : '#000' }}>
-          {variance < 0 ? '−' : '+'}{fmt(Math.abs(variance))}
+        <div style={{ ...styles.costBarVariance, color: variance < 0 ? C.green : C.red }}>
+          {variance < 0 ? '↓' : '↑'}{fmt(Math.abs(variance))}
         </div>
         <button onClick={onDelete} style={styles.miniBtn} title="Delete">×</button>
       </div>
@@ -2847,23 +2847,27 @@ function BalanceSheet({ data, save, workingCapital, totalAR, totalAssets, totalL
         const maxCash = Math.max(...cashPath, data.balanceSheet.cash);
         const minMonth = periods[cashPath.indexOf(minCash)] || periods[0];
         return (
-          <div style={{ marginTop: 14, background: C.surface, border: `1px solid ${C.border}`, padding: 14 }}>
+          <div style={{ marginTop: 14, background: C.surface, border: `1px solid ${C.border}`, padding: 14, borderRadius: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
               <div>
                 <div style={{ fontSize: '7pt', textTransform: 'uppercase', letterSpacing: '0.1em', color: C.text2, fontWeight: 700 }}>xP&A Cash Trajectory</div>
                 <div style={{ fontSize: '8pt', color: C.text2, marginTop: 2 }}>Scenario: <strong>{activeScenario?.name}</strong> · Min cash {fmt(minCash, 1)} in {monthLabel(minMonth)}</div>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${periods.length}, 1fr)`, gap: 1, background: '#D9D9D9', border: '1px solid #808080' }}>
-              {periods.map((p, i) => (
-                <div key={p} style={{ background: '#fff', padding: '10px 8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>{monthLabel(p)}</div>
-                  <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700, marginTop: 3 }}>{fmt(cashPath[i], 1)}</div>
-                  <div style={{ fontSize: '6.5pt', color: runwayPath[i] < 2 ? '#000' : '#404040', marginTop: 2, fontWeight: runwayPath[i] < 2 ? 700 : 400 }}>
-                    {runwayPath[i].toFixed(1)} mo runway
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${periods.length}, 1fr)`, gap: 8 }}>
+              {periods.map((p, i) => {
+                const low = runwayPath[i] < 3;
+                const warn = runwayPath[i] < 5;
+                return (
+                  <div key={p} style={{ background: low ? C.redBg : warn ? C.amberBg : '#f5f4ef', border: `1px solid ${low ? C.redBorder : warn ? C.amberBorder : C.border}`, padding: '10px 8px', textAlign: 'center', borderRadius: '4px' }}>
+                    <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>{monthLabel(p)}</div>
+                    <div style={{ fontFamily: 'Lora, serif', fontSize: '11pt', fontWeight: 700, marginTop: 3 }}>{fmt(cashPath[i], 1)}</div>
+                    <div style={{ fontSize: '6.5pt', color: low ? C.red : warn ? C.amber : C.green, marginTop: 2, fontWeight: 600 }}>
+                      {runwayPath[i].toFixed(1)} mo runway
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
@@ -4734,7 +4738,7 @@ function RiskScenarios({ data, save }) {
           return (
             <div key={s.id} style={{ ...styles.scenarioCard, ...(s.type === 'base' ? styles.scenarioBase : {}) }}>
               <div style={styles.scenarioHeader}>
-                <div style={{ ...styles.scenarioIcon, background: s.type === 'bear' ? '#D9D9D9' : s.type === 'bull' ? '#000' : '#808080' }} />
+                <div style={{ ...styles.scenarioIcon, background: s.type === 'bear' ? C.red : s.type === 'bull' ? C.green : C.amber }} />
                 <div style={styles.scenarioTitle}>
                   <EditableValue type="text" value={s.name} onChange={(v) => updateScenario(s.id, 'name', v)} />
                 </div>
@@ -4760,7 +4764,7 @@ function RiskScenarios({ data, save }) {
                 </div>
               </div>
 
-              <div style={{ marginTop: 12, padding: 10, background: '#F2F2F2', border: `1px solid ${C.border}` }}>
+              <div style={{ marginTop: 12, padding: 10, background: '#f5f4ef', border: `1px solid ${C.border}`, borderRadius: '4px' }}>
                 <div style={{ fontSize: '6.5pt', textTransform: 'uppercase', letterSpacing: '0.08em', color: C.text2, marginBottom: 4 }}>Calculated Outputs</div>
                 <div style={{ fontSize: '8pt', display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
                   <span>Q1 Revenue:</span>
@@ -4812,7 +4816,7 @@ function RiskHeatmap({ risks }) {
           <div style={{ ...styles.hmLabel, gridColumn: 1, gridRow: pi + 2 }}>{prob}</div>
           {impacts.map((imp, ii) => {
             const score = (probs.indexOf(prob) + impacts.indexOf(imp));
-            const bg = score >= 3 ? '#D9D9D9' : score >= 1 ? '#E8E8E8' : '#F2F2F2';
+            const bg = score >= 3 ? C.redBg : score >= 1 ? C.amberBg : C.greenBg;
             const items = cells[`${prob}-${imp}`] || [];
             return (
               <div key={`${prob}-${imp}`} style={{ ...styles.hmCell, background: bg, gridColumn: ii + 2, gridRow: pi + 2 }}>
@@ -5022,29 +5026,29 @@ function Actions({ data, save, viewport }) {
 
       {/* TOP METRICS STRIP */}
       <div style={{ ...styles.actionMetrics, gridTemplateColumns: isMobile ? '1fr 1fr 1fr' : 'repeat(6, 1fr)' }}>
-        <div style={{ ...styles.actionMetric, background: metrics.overdue > 0 ? '#000' : '#fff', color: metrics.overdue > 0 ? '#fff' : '#000', cursor: 'pointer' }} onClick={() => setView('today')}>
-          <div style={{ ...styles.actionMetricLabel, color: metrics.overdue > 0 ? '#D9D9D9' : '#808080' }}>Overdue</div>
-          <div style={styles.actionMetricValue}>{metrics.overdue}</div>
+        <div style={{ ...styles.actionMetric, background: metrics.overdue > 0 ? C.redBg : C.surface, borderColor: metrics.overdue > 0 ? C.redBorder : C.border, cursor: 'pointer' }} onClick={() => setView('today')}>
+          <div style={{ ...styles.actionMetricLabel, color: metrics.overdue > 0 ? C.red : C.text3 }}>Overdue</div>
+          <div style={{ ...styles.actionMetricValue, color: metrics.overdue > 0 ? C.red : C.text }}>{metrics.overdue}</div>
         </div>
-        <div style={styles.actionMetric} onClick={() => setView('today')}>
+        <div style={{ ...styles.actionMetric, cursor: 'pointer' }} onClick={() => setView('today')}>
           <div style={styles.actionMetricLabel}>Due Today</div>
-          <div style={styles.actionMetricValue}>{metrics.today}</div>
+          <div style={{ ...styles.actionMetricValue, color: metrics.today > 0 ? C.amber : C.text }}>{metrics.today}</div>
         </div>
-        <div style={styles.actionMetric} onClick={() => setView('week')}>
+        <div style={{ ...styles.actionMetric, cursor: 'pointer' }} onClick={() => setView('week')}>
           <div style={styles.actionMetricLabel}>This Week</div>
           <div style={styles.actionMetricValue}>{metrics.thisWeek}</div>
         </div>
         <div style={styles.actionMetric}>
           <div style={styles.actionMetricLabel}>In Progress</div>
-          <div style={styles.actionMetricValue}>{metrics.inProgress}</div>
+          <div style={{ ...styles.actionMetricValue, color: metrics.inProgress > 0 ? C.green : C.text }}>{metrics.inProgress}</div>
         </div>
         <div style={styles.actionMetric}>
           <div style={styles.actionMetricLabel}>Total Open</div>
           <div style={styles.actionMetricValue}>{metrics.total}</div>
         </div>
-        <div style={{ ...styles.actionMetric, background: '#F2F2F2' }}>
+        <div style={{ ...styles.actionMetric, background: '#f5f4ef' }}>
           <div style={styles.actionMetricLabel}>Done (lifetime)</div>
-          <div style={styles.actionMetricValue}>{metrics.completed}</div>
+          <div style={{ ...styles.actionMetricValue, color: C.green }}>{metrics.completed}</div>
         </div>
       </div>
 
@@ -5197,10 +5201,10 @@ function TodayView({ overdue, dueToday, inProgress, upNext, onSelect, onUpdate, 
 
 function FocusBlock({ title, subtitle, tone, actions, onSelect, onUpdate, selectedId }) {
   const toneStyles = {
-    urgent: { borderLeft: '4px solid #000', background: C.surface },
-    primary: { borderLeft: '4px solid #000', background: '#fff' },
-    active: { borderLeft: '4px solid #808080', background: '#fff' },
-    future: { borderLeft: '4px solid #D9D9D9', background: '#fff' },
+    urgent: { borderLeft: `4px solid ${C.red}`, background: C.redBg },
+    primary: { borderLeft: `4px solid ${C.amber}`, background: C.amberBg },
+    active: { borderLeft: `4px solid ${C.green}`, background: C.greenBg },
+    future: { borderLeft: `4px solid ${C.border}`, background: C.surface },
   };
   return (
     <div style={{ marginBottom: 18 }}>
@@ -5231,7 +5235,7 @@ function ActionRow({ action, onSelect, onUpdate, selectedId }) {
     <div
       style={{
         ...styles.actionRow,
-        ...(isSelected ? { borderColor: '#000', boxShadow: '0 0 0 1px #000' } : {}),
+        ...(isSelected ? { borderColor: C.text, boxShadow: `0 0 0 1.5px ${C.text}` } : {}),
         ...(isDone ? { opacity: 0.55 } : {}),
       }}
       onClick={() => onSelect(a.id)}
@@ -5248,7 +5252,7 @@ function ActionRow({ action, onSelect, onUpdate, selectedId }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ ...styles.actionRowTitle, textDecoration: isDone ? 'line-through' : 'none' }}>{a.title}</div>
         <div style={{ display: 'flex', gap: 10, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ ...styles.actionMeta, fontWeight: 600, color: a.isOverdue ? '#000' : '#404040' }}>
+          <span style={{ ...styles.actionMeta, fontWeight: 600, color: a.isOverdue ? C.red : a.daysUntil === 0 ? C.amber : C.text2 }}>
             {dueText}
           </span>
           <span style={styles.actionMeta}>{a.owner}</span>
@@ -5259,7 +5263,7 @@ function ActionRow({ action, onSelect, onUpdate, selectedId }) {
             </span>
           )}
           {a.linkedMetric && (
-            <span style={{ ...styles.actionMeta, color: '#000', fontWeight: 600 }}>↔ Linked</span>
+            <span style={{ ...styles.actionMeta, color: C.green, fontWeight: 600 }}>↔ Linked</span>
           )}
         </div>
         {a.subtaskTotal > 0 && (
@@ -5274,7 +5278,7 @@ function ActionRow({ action, onSelect, onUpdate, selectedId }) {
         <div style={styles.actionEffortBadge}>{a.effort}</div>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '6pt', textTransform: 'uppercase', color: C.text2, letterSpacing: '0.06em' }}>Score</div>
-          <div style={{ fontFamily: 'Lora, serif', fontSize: '13pt', fontWeight: 700, lineHeight: 1, color: a.priorityScore >= 8 ? '#000' : '#404040' }}>
+          <div style={{ fontFamily: 'Lora, serif', fontSize: '13pt', fontWeight: 700, lineHeight: 1, color: a.priorityScore >= 8 ? C.red : a.priorityScore >= 6 ? C.amber : C.text }}>
             {a.priorityScore.toFixed(1)}
           </div>
         </div>
