@@ -1,0 +1,21 @@
+{
+  "name": "meridian-finance-cockpit",
+  "version": "8.0.0",
+  "description": "Driver-based financial planning & forecasting for membership orgs",
+  "type": "module",
+  "main": "src/App.jsx",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "claude": "claude-code ."
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0"
+  }
+}

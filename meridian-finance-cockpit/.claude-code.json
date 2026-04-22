@@ -1,0 +1,10 @@
+{
+  "name": "Meridian Finance Cockpit v8",
+  "description": "Driver-based financial planning for membership orgs",
+  "entrypoint": "src/FinanceCockpit.jsx",
+  "dependencies": ["react", "react-dom"],
+  "commands": {
+    "dev": "vite",
+    "build": "vite build"
+  }
+}
