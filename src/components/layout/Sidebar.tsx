@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileBarChart2, CheckSquare,
-  ShieldCheck, TrendingUp, Settings, ChevronRight
+  ShieldCheck, TrendingUp, Settings, ChevronRight,
+  Zap, Users, Upload, FileText, Download,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { COMPANY_NAME } from '@/lib/demoData'
@@ -16,8 +17,17 @@ const NAV = [
   { href: '/strategy', label: 'Finance Strategy', icon: TrendingUp },
 ]
 
+const ELEC_NAV = [
+  { href: '/electricity', label: 'Overview', icon: Zap, exact: true },
+  { href: '/electricity/customers', label: 'Customers', icon: Users },
+  { href: '/electricity/usage', label: 'Meter Readings', icon: Upload },
+  { href: '/electricity/invoices', label: 'Invoices', icon: FileText },
+  { href: '/electricity/exports', label: 'Exports & ABA', icon: Download },
+]
+
 export default function Sidebar() {
   const pathname = usePathname()
+  const inElec = pathname.startsWith('/electricity')
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex flex-col" style={{ width: 'var(--nav-width)', background: 'var(--nav-bg)' }}>
@@ -57,6 +67,33 @@ export default function Sidebar() {
             )
           })}
         </ul>
+
+        {/* Electricity Billing Section */}
+        <div className="mt-4">
+          <p className="text-nav-text text-xs font-medium uppercase tracking-wider px-2 mb-2">Electricity Billing</p>
+          <ul className="space-y-0.5">
+            {ELEC_NAV.map(({ href, label, icon: Icon, exact }) => {
+              const active = exact ? pathname === href : pathname.startsWith(href)
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
+                      active
+                        ? 'bg-nav-active text-nav-textActive'
+                        : 'text-nav-text hover:bg-nav-hover hover:text-nav-textActive'
+                    )}
+                  >
+                    <Icon size={16} className={cn('flex-shrink-0', active ? 'text-indigo-400' : 'text-nav-text group-hover:text-nav-textActive')} />
+                    <span className="flex-1">{label}</span>
+                    {active && <ChevronRight size={14} className="text-indigo-400" />}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       </nav>
 
       {/* Footer */}
