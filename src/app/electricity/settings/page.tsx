@@ -161,6 +161,13 @@ export default function SettingsPage() {
               {field('bpayBillerCode', 'BPAY Biller Code')}
             </div>
           </div>
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Email (Resend)</p>
+            <p className="text-xs text-slate-400 mb-3">The verified sender address configured in your Resend account. Invoices are sent from this address.</p>
+            <div className="grid grid-cols-2 gap-3">
+              {field('senderEmail', 'Sender Email (From address)')}
+            </div>
+          </div>
           <div className="flex justify-end">
             <button onClick={handleSave}
               className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">

@@ -239,12 +239,16 @@ export function downloadFile(content: string | Blob, filename: string, mimeType 
   URL.revokeObjectURL(url)
 }
 
-export function generateUsageCSVTemplate(apartments: Apartment[], buildings: Building[]): string {
+export function generateUsageCSVTemplate(apartments: Apartment[], buildings: Building[], readings: MeterReading[] = []): string {
   const bldMap = new Map(buildings.map(b => [b.id, b]))
   const headers = ['Apartment ID','Unit Number','Building','Meter Number','Reading Date (YYYY-MM-DD)','Previous Reading (kWh)','Current Reading (kWh)']
   const rows = apartments.map(apt => {
     const bld = bldMap.get(apt.buildingId)
-    return csvRow([apt.id, apt.unitNumber, bld?.name ?? '', apt.meterNumber, '', '', ''])
+    // Find the most recent stored reading for this apartment to pre-fill Previous Reading
+    const lastReading = readings
+      .filter(r => r.apartmentId === apt.id)
+      .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))[0]
+    return csvRow([apt.id, apt.unitNumber, bld?.name ?? '', apt.meterNumber, '', lastReading?.currentReading ?? '', ''])
   })
   return [csvRow(headers), ...rows].join('\n')
 }

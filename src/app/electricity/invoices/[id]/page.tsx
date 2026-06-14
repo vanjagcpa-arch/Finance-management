@@ -38,22 +38,26 @@ export default function InvoiceDetailPage() {
     color: usageColor(h.usage, building?.lowUsageThreshold ?? 180, building?.highUsageThreshold ?? 380),
   })), [usageHistory, invoice, building])
 
+  async function generatePDFBlob(): Promise<Blob> {
+    const { pdf } = await import('@react-pdf/renderer')
+    const { default: InvoicePDF } = await import('@/components/electricity/InvoicePDF')
+    return pdf(
+      <InvoicePDF
+        invoice={invoice!}
+        customer={customer!}
+        apt={apt!}
+        building={building!}
+        settings={settings}
+        usageHistory={usageHistory}
+      />
+    ).toBlob()
+  }
+
   async function handleDownloadPDF() {
     if (!invoice || !customer || !apt || !building) return
     setDownloading(true)
     try {
-      const { pdf } = await import('@react-pdf/renderer')
-      const { default: InvoicePDF } = await import('@/components/electricity/InvoicePDF')
-      const blob = await pdf(
-        <InvoicePDF
-          invoice={invoice}
-          customer={customer}
-          apt={apt}
-          building={building}
-          settings={settings}
-          usageHistory={usageHistory}
-        />
-      ).toBlob()
+      const blob = await generatePDFBlob()
       downloadFile(blob, `${invoice.invoiceNumber}.pdf`, 'application/pdf')
     } catch (e) {
       console.error('PDF error', e)
@@ -62,13 +66,64 @@ export default function InvoiceDetailPage() {
     }
   }
 
-  function handleSend() {
+  async function handleSend() {
+    if (!invoice || !customer) return
     setSending(true)
-    setTimeout(() => {
-      if (invoice) updateInvoice({ ...invoice, status: 'sent' })
-      setSending(false)
+    try {
+      const blob = await generatePDFBlob()
+      const arrayBuf = await blob.arrayBuffer()
+      const pdfBase64 = Buffer.from(arrayBuf).toString('base64')
+
+      const isDDR = customer.paymentMethod === 'direct_debit'
+      const res = await fetch('/api/send-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: customer.email,
+          customerFirstName: customer.firstName,
+          isDDR,
+          customerBSB: isDDR ? customer.bsb : undefined,
+          customerAccount: isDDR ? customer.accountNumber : undefined,
+          customerAccountName: isDDR ? customer.accountName : undefined,
+          invoiceNumber: invoice.invoiceNumber,
+          period: `${monthName(invoice.month, invoice.year)}`,
+          issueDate: invoice.issueDate,
+          dueDate: invoice.dueDate,
+          isFinalBill: invoice.isFinalBill ?? false,
+          usage: invoice.usage,
+          usageCharge: invoice.usageCharge,
+          supplyCharge: invoice.supplyCharge,
+          subtotal: invoice.subtotal,
+          gst: invoice.gst,
+          total: invoice.total,
+          ratePerKwh: invoice.ratePerKwh,
+          dailySupplyCharge: settings.tariff.dailySupplyCharge,
+          daysInPeriod: invoice.daysInPeriod,
+          gstRate: settings.tariff.gstRate,
+          companyName: settings.companyName,
+          fromEmail: settings.senderEmail,
+          companyEmail: settings.email,
+          companyPhone: settings.phone,
+          companyABN: settings.abn,
+          bpayBillerCode: settings.bpayBillerCode,
+          bankBSB: settings.bsb,
+          bankAccount: settings.accountNumber,
+          bankAccountName: settings.accountName,
+          bankName: settings.bankName,
+          pdfBase64,
+          pdfFilename: `${invoice.invoiceNumber}.pdf`,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Send failed')
+      updateInvoice({ ...invoice, status: 'sent' })
       setEmailSent(true)
-    }, 1200)
+    } catch (e) {
+      console.error('Send error', e)
+      alert(`Failed to send: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setSending(false)
+    }
   }
 
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>
