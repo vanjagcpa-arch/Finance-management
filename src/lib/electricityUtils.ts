@@ -81,24 +81,29 @@ function abaAmount(cents: number): string {
   return String(Math.round(Math.abs(cents))).padStart(10, '0')
 }
 
-export function generateABAFile(
-  invoices: ElectricityInvoice[],
-  customers: Customer[],
+export interface ABATransaction {
+  invoiceId: string
+  customerId: string
+  invoiceNumber: string
+  customerName: string
+  bsb: string
+  accountNumber: string
+  accountName: string
+  amount: number
+}
+
+/** Generate ABA file from an explicit list of transactions (caller controls selection and amounts). */
+export function generateABAFileFromTransactions(
+  transactions: ABATransaction[],
   settings: ElectricitySettings,
   processDate: Date,
 ): string {
-  const ddInvoices = invoices.filter(inv => {
-    const c = customers.find(c => c.id === inv.customerId)
-    return c?.paymentMethod === 'direct_debit' && inv.status === 'sent'
-  })
-
   const dd = String(processDate.getDate()).padStart(2, '0')
   const mm = String(processDate.getMonth() + 1).padStart(2, '0')
   const yy = String(processDate.getFullYear()).slice(-2)
   const dateStr = `${dd}${mm}${yy}`
   const traceBsb = settings.bsb
 
-  // Type 0 Header (120 chars)
   const header = [
     '0',
     padR('', 17),
@@ -114,23 +119,19 @@ export function generateABAFile(
   const lines = [header]
   let totalCents = 0, debitCents = 0
 
-  for (const inv of ddInvoices) {
-    const customer = customers.find(c => c.id === inv.customerId)
-    if (!customer) continue
-    const cents = Math.round(inv.total * 100)
+  for (const tx of transactions) {
+    const cents = Math.round(tx.amount * 100)
     totalCents += cents
     debitCents += cents
-
-    // Type 1 Detail (120 chars)
     const detail = [
       '1',
-      customer.bsb,
-      padL(customer.accountNumber, 9),
+      tx.bsb,
+      padL(tx.accountNumber, 9),
       ' ',
       '13',
       abaAmount(cents),
-      padR(`${customer.firstName} ${customer.lastName}`, 32),
-      padR(inv.invoiceNumber, 18),
+      padR(tx.customerName, 32),
+      padR(tx.invoiceNumber, 18),
       traceBsb,
       padL(settings.accountNumber, 9),
       padR(settings.companyName.slice(0, 16), 16),
@@ -139,7 +140,6 @@ export function generateABAFile(
     lines.push(detail)
   }
 
-  // Type 7 File Total (120 chars)
   const trailer = [
     '7',
     '999-999',
@@ -148,12 +148,57 @@ export function generateABAFile(
     abaAmount(0),
     abaAmount(debitCents),
     padR('', 24),
-    padL(String(ddInvoices.length), 6, '0'),
+    padL(String(transactions.length), 6, '0'),
     padR('', 40),
   ].join('')
   lines.push(trailer)
 
   return lines.join('\r\n')
+}
+
+/** Legacy wrapper — kept for any existing callers. */
+export function generateABAFile(
+  invoices: ElectricityInvoice[],
+  customers: Customer[],
+  settings: ElectricitySettings,
+  processDate: Date,
+): string {
+  const transactions: ABATransaction[] = invoices
+    .filter(inv => {
+      const c = customers.find(c => c.id === inv.customerId)
+      return c?.paymentMethod === 'direct_debit' && inv.status === 'sent'
+    })
+    .flatMap(inv => {
+      const c = customers.find(c => c.id === inv.customerId)
+      if (!c) return []
+      return [{ invoiceId: inv.id, customerId: c.id, invoiceNumber: inv.invoiceNumber, customerName: `${c.firstName} ${c.lastName}`, bsb: c.bsb, accountNumber: c.accountNumber, accountName: c.accountName, amount: inv.total }]
+    })
+  return generateABAFileFromTransactions(transactions, settings, processDate)
+}
+
+/** Generate MYOB Receive Payments CSV for a set of ABA transactions (use ABA process date as receipt date). */
+export function generateMYOBDDRReceipts(
+  transactions: ABATransaction[],
+  customers: Customer[],
+  processDate: Date,
+): string {
+  const custMap = new Map(customers.map(c => [c.id, c]))
+  const receiptDate = formatShortDate(processDate.toISOString().split('T')[0])
+  const headers = ['Customer Card ID','Receipt Number','Receipt Date','Payment Method','Amount','Memo','Invoice Applied To','Amount Applied']
+  const rows = transactions.map((tx, idx) => {
+    const cust = custMap.get(tx.customerId)
+    return csvRow([
+      cust?.myobCardId ?? tx.customerId,
+      `DDR-${String(idx + 1).padStart(4, '0')}`,
+      receiptDate,
+      'Direct Debit',
+      tx.amount.toFixed(2),
+      `DDR Payment - ${tx.invoiceNumber}`,
+      tx.invoiceNumber,
+      tx.amount.toFixed(2),
+    ])
+  })
+  return [csvRow(headers), ...rows].join('\n')
 }
 
 // --- MYOB CSV Exports ---
