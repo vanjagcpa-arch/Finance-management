@@ -1,123 +1,238 @@
 'use client'
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
-import type { Customer, MeterReading, ElectricityInvoice, ElectricitySettings } from './electricityTypes'
+import type { Building, Apartment, Customer, MeterReading, ElectricityInvoice, ElectricitySettings } from './electricityTypes'
 import {
-  APARTMENTS,
+  BUILDINGS as SEED_BUILDINGS,
+  APARTMENTS as SEED_APARTMENTS,
+  generateAllApartments,
   generateDemoCustomers,
   generateDemoReadings,
   generateDemoInvoices,
   DEFAULT_SETTINGS,
 } from './electricityData'
+import { calculateProRataBill } from './electricityUtils'
 
-const STORAGE_KEYS = {
-  customers: 'elec_customers',
-  readings: 'elec_readings',
-  invoices: 'elec_invoices',
-  settings: 'elec_settings',
-  initialized: 'elec_initialized',
-  invoiceCounter: 'elec_inv_counter',
+const KEYS = {
+  buildings: 'elec_buildings_v2',
+  apartments: 'elec_apartments_v2',
+  customers:  'elec_customers_v2',
+  readings:   'elec_readings_v2',
+  invoices:   'elec_invoices_v2',
+  settings:   'elec_settings_v2',
+  initialized:'elec_init_v2',
+  counter:    'elec_counter_v2',
 }
 
 interface ElectricityStore {
-  customers: Customer[]
-  readings: MeterReading[]
-  invoices: ElectricityInvoice[]
-  settings: ElectricitySettings
-  isLoaded: boolean
-  addCustomer: (c: Customer) => void
+  buildings:  Building[]
+  apartments: Apartment[]
+  customers:  Customer[]
+  readings:   MeterReading[]
+  invoices:   ElectricityInvoice[]
+  settings:   ElectricitySettings
+  isLoaded:   boolean
+  // Buildings
+  addBuilding:    (b: Building) => Apartment[]
+  updateBuilding: (b: Building) => void
+  removeBuilding: (id: string) => void
+  // Customers
+  addCustomer:    (c: Customer) => void
   updateCustomer: (c: Customer) => void
   removeCustomer: (id: string) => void
-  upsertReadings: (readings: MeterReading[]) => void
-  upsertInvoices: (invoices: ElectricityInvoice[]) => void
-  updateInvoice: (invoice: ElectricityInvoice) => void
+  offboardCustomer: (customerId: string, moveOutDate: string, finalReading: number) => void
+  // Data
+  upsertReadings: (r: MeterReading[]) => void
+  upsertInvoices: (i: ElectricityInvoice[]) => void
+  updateInvoice:  (i: ElectricityInvoice) => void
   updateSettings: (s: ElectricitySettings) => void
-  nextInvoiceNumber: (prefix: string, month: number, year: number) => string
+  nextInvoiceNumber: (month: number, year: number) => string
   resetToDemo: () => void
 }
 
-const ElectricityCtx = createContext<ElectricityStore | null>(null)
+const Ctx = createContext<ElectricityStore | null>(null)
 
 export function ElectricityProvider({ children }: { children: ReactNode }) {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [readings, setReadings] = useState<MeterReading[]>([])
-  const [invoices, setInvoices] = useState<ElectricityInvoice[]>([])
-  const [settings, setSettings] = useState<ElectricitySettings>(DEFAULT_SETTINGS)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [buildings,  setBuildings]  = useState<Building[]>([])
+  const [apartments, setApartments] = useState<Apartment[]>([])
+  const [customers,  setCustomers]  = useState<Customer[]>([])
+  const [readings,   setReadings]   = useState<MeterReading[]>([])
+  const [invoices,   setInvoices]   = useState<ElectricityInvoice[]>([])
+  const [settings,   setSettings]   = useState<ElectricitySettings>(DEFAULT_SETTINGS)
+  const [isLoaded,   setIsLoaded]   = useState(false)
 
   const save = useCallback((key: string, data: unknown) => {
-    try { localStorage.setItem(key, JSON.stringify(data)) } catch { /* quota exceeded */ }
+    try { localStorage.setItem(key, JSON.stringify(data)) } catch {}
   }, [])
 
-  const initDemo = useCallback((cfg: ElectricitySettings) => {
-    const demoCustomers = generateDemoCustomers(APARTMENTS)
-    const demoReadings = generateDemoReadings(APARTMENTS, 5, 2026)
-    const demoInvoices = generateDemoInvoices(APARTMENTS, demoCustomers, demoReadings, 5, 2026, cfg)
-    save(STORAGE_KEYS.customers, demoCustomers)
-    save(STORAGE_KEYS.readings, demoReadings)
-    save(STORAGE_KEYS.invoices, demoInvoices)
-    save(STORAGE_KEYS.initialized, true)
-    save(STORAGE_KEYS.invoiceCounter, demoInvoices.length)
+  const initDemo = useCallback((cfg: ElectricitySettings, blds: Building[]) => {
+    const apts = generateAllApartments(blds)
+    const demoCustomers = generateDemoCustomers(apts)
+
+    // Generate 12 months of readings: Jun 2025 → May 2026
+    const allReadings: MeterReading[] = []
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(2026, 4 - i, 1)
+      allReadings.push(...generateDemoReadings(apts, d.getMonth() + 1, d.getFullYear()))
+    }
+
+    const demoInvoices = generateDemoInvoices(apts, demoCustomers, allReadings, 5, 2026, cfg)
+
+    save(KEYS.buildings,   blds)
+    save(KEYS.apartments,  apts)
+    save(KEYS.customers,   demoCustomers)
+    save(KEYS.readings,    allReadings)
+    save(KEYS.invoices,    demoInvoices)
+    save(KEYS.initialized, true)
+    save(KEYS.counter,     demoInvoices.length)
+
+    setBuildings(blds)
+    setApartments(apts)
     setCustomers(demoCustomers)
-    setReadings(demoReadings)
+    setReadings(allReadings)
     setInvoices(demoInvoices)
   }, [save])
 
   useEffect(() => {
-    const initialized = localStorage.getItem(STORAGE_KEYS.initialized)
-    const savedSettings: ElectricitySettings = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) ?? 'null') ?? DEFAULT_SETTINGS
-
+    const initialized = localStorage.getItem(KEYS.initialized)
+    const savedSettings: ElectricitySettings = JSON.parse(localStorage.getItem(KEYS.settings) ?? 'null') ?? DEFAULT_SETTINGS
     setSettings(savedSettings)
 
     if (!initialized) {
-      initDemo(savedSettings)
+      initDemo(savedSettings, SEED_BUILDINGS)
     } else {
-      setCustomers(JSON.parse(localStorage.getItem(STORAGE_KEYS.customers) ?? '[]'))
-      setReadings(JSON.parse(localStorage.getItem(STORAGE_KEYS.readings) ?? '[]'))
-      setInvoices(JSON.parse(localStorage.getItem(STORAGE_KEYS.invoices) ?? '[]'))
+      setBuildings(JSON.parse(localStorage.getItem(KEYS.buildings) ?? 'null') ?? SEED_BUILDINGS)
+      setApartments(JSON.parse(localStorage.getItem(KEYS.apartments) ?? 'null') ?? SEED_APARTMENTS)
+      setCustomers(JSON.parse(localStorage.getItem(KEYS.customers) ?? '[]'))
+      setReadings(JSON.parse(localStorage.getItem(KEYS.readings) ?? '[]'))
+      setInvoices(JSON.parse(localStorage.getItem(KEYS.invoices) ?? '[]'))
     }
     setIsLoaded(true)
   }, [initDemo])
 
+  // --- Buildings ---
+  const addBuilding = useCallback((b: Building): Apartment[] => {
+    const newApts = generateAllApartments([b])
+    setBuildings(prev => { const next = [...prev, b]; save(KEYS.buildings, next); return next })
+    setApartments(prev => { const next = [...prev, ...newApts]; save(KEYS.apartments, next); return next })
+    return newApts
+  }, [save])
+
+  const updateBuilding = useCallback((b: Building) => {
+    setBuildings(prev => { const next = prev.map(x => x.id === b.id ? b : x); save(KEYS.buildings, next); return next })
+  }, [save])
+
+  const removeBuilding = useCallback((id: string) => {
+    setBuildings(prev => { const next = prev.filter(x => x.id !== id); save(KEYS.buildings, next); return next })
+    setApartments(prev => { const next = prev.filter(a => a.buildingId !== id); save(KEYS.apartments, next); return next })
+  }, [save])
+
+  // --- Customers ---
   const addCustomer = useCallback((c: Customer) => {
-    setCustomers(prev => {
-      const next = [...prev, c]
-      save(STORAGE_KEYS.customers, next)
-      return next
-    })
+    setCustomers(prev => { const next = [...prev, c]; save(KEYS.customers, next); return next })
   }, [save])
 
   const updateCustomer = useCallback((c: Customer) => {
-    setCustomers(prev => {
-      const next = prev.map(x => x.id === c.id ? c : x)
-      save(STORAGE_KEYS.customers, next)
-      return next
-    })
+    setCustomers(prev => { const next = prev.map(x => x.id === c.id ? c : x); save(KEYS.customers, next); return next })
   }, [save])
 
   const removeCustomer = useCallback((id: string) => {
-    setCustomers(prev => {
-      const next = prev.filter(x => x.id !== id)
-      save(STORAGE_KEYS.customers, next)
-      return next
-    })
+    setCustomers(prev => { const next = prev.filter(x => x.id !== id); save(KEYS.customers, next); return next })
   }, [save])
 
-  const upsertReadings = useCallback((newReadings: MeterReading[]) => {
+  const offboardCustomer = useCallback((customerId: string, moveOutDate: string, finalReading: number) => {
+    setCustomers(prev => {
+      const next = prev.map(c => c.id === customerId ? { ...c, moveOutDate } : c)
+      save(KEYS.customers, next)
+      return next
+    })
+
+    setInvoices(prev => {
+      const customer = prev.find(i => i.customerId === customerId) // find any invoice for customer
+      if (!customer) return prev
+
+      // Get apt from context readings
+      setReadings(currentReadings => {
+        const aptId = currentReadings.find(r => {
+          const any = prev.find(i => i.customerId === customerId)
+          return any && r.apartmentId === any.apartmentId
+        })?.apartmentId
+
+        if (!aptId) return currentReadings
+
+        const moveMonth = parseInt(moveOutDate.split('-')[1])
+        const moveYear  = parseInt(moveOutDate.split('-')[0])
+
+        // Get latest reading for previous reading
+        const latestReading = currentReadings
+          .filter(r => r.apartmentId === aptId)
+          .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))[0]
+
+        const prevReading = latestReading?.currentReading ?? 0
+        const billingStart = `${moveYear}-${String(moveMonth).padStart(2,'0')}-01`
+
+        const bill = calculateProRataBill(moveOutDate, billingStart, prevReading, finalReading, settings.tariff)
+
+        const counter = parseInt(localStorage.getItem(KEYS.counter) ?? '0') + 1
+        localStorage.setItem(KEYS.counter, String(counter))
+
+        const finalInvoice: ElectricityInvoice = {
+          id: `final-${aptId}-${Date.now()}`,
+          invoiceNumber: `${settings.invoicePrefix}-${moveYear}${String(moveMonth).padStart(2,'0')}-${String(counter).padStart(4,'0')}`,
+          customerId,
+          apartmentId: aptId,
+          buildingId: prev.find(i => i.apartmentId === aptId)?.buildingId ?? '',
+          month: moveMonth, year: moveYear,
+          issueDate: moveOutDate,
+          dueDate: new Date(moveYear, moveMonth - 1, parseInt(moveOutDate.split('-')[2]) + settings.paymentTermsDays).toISOString().split('T')[0],
+          billingPeriodStart: billingStart,
+          billingPeriodEnd: moveOutDate,
+          daysInPeriod: bill.daysInPeriod,
+          previousReading: prevReading,
+          currentReading: finalReading,
+          usage: bill.usage,
+          ratePerKwh: settings.tariff.ratePerKwh,
+          usageCharge: bill.usageCharge,
+          supplyCharge: bill.supplyCharge,
+          subtotal: bill.subtotal,
+          gst: bill.gst,
+          total: bill.total,
+          status: 'draft',
+          isFinalBill: true,
+        }
+
+        // Cancel existing invoice for this apartment in this month (if any)
+        const updated = prev.map(i =>
+          i.apartmentId === aptId && i.month === moveMonth && i.year === moveYear && !i.isFinalBill
+            ? { ...i, status: 'cancelled' as const }
+            : i
+        )
+        const next = [...updated, finalInvoice]
+        save(KEYS.invoices, next)
+
+        return currentReadings
+      })
+
+      return prev // outer setInvoices returns unchanged (inner setReadings handles it)
+    })
+  }, [save, settings])
+
+  // --- Readings & Invoices ---
+  const upsertReadings = useCallback((newR: MeterReading[]) => {
     setReadings(prev => {
       const map = new Map(prev.map(r => [r.id, r]))
-      newReadings.forEach(r => map.set(r.id, r))
+      newR.forEach(r => map.set(r.id, r))
       const next = Array.from(map.values())
-      save(STORAGE_KEYS.readings, next)
+      save(KEYS.readings, next)
       return next
     })
   }, [save])
 
-  const upsertInvoices = useCallback((newInvoices: ElectricityInvoice[]) => {
+  const upsertInvoices = useCallback((newI: ElectricityInvoice[]) => {
     setInvoices(prev => {
       const map = new Map(prev.map(i => [i.id, i]))
-      newInvoices.forEach(i => map.set(i.id, i))
+      newI.forEach(i => map.set(i.id, i))
       const next = Array.from(map.values())
-      save(STORAGE_KEYS.invoices, next)
+      save(KEYS.invoices, next)
       return next
     })
   }, [save])
@@ -125,42 +240,43 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
   const updateInvoice = useCallback((invoice: ElectricityInvoice) => {
     setInvoices(prev => {
       const next = prev.map(i => i.id === invoice.id ? invoice : i)
-      save(STORAGE_KEYS.invoices, next)
+      save(KEYS.invoices, next)
       return next
     })
   }, [save])
 
   const updateSettings = useCallback((s: ElectricitySettings) => {
     setSettings(s)
-    save(STORAGE_KEYS.settings, s)
+    save(KEYS.settings, s)
   }, [save])
 
-  const nextInvoiceNumber = useCallback((prefix: string, month: number, year: number): string => {
-    const counter = parseInt(localStorage.getItem(STORAGE_KEYS.invoiceCounter) ?? '0') + 1
-    localStorage.setItem(STORAGE_KEYS.invoiceCounter, String(counter))
-    return `${prefix}-${year}${String(month).padStart(2, '0')}-${String(counter).padStart(4, '0')}`
-  }, [])
+  const nextInvoiceNumber = useCallback((month: number, year: number): string => {
+    const counter = parseInt(localStorage.getItem(KEYS.counter) ?? '0') + 1
+    localStorage.setItem(KEYS.counter, String(counter))
+    return `${settings.invoicePrefix}-${year}${String(month).padStart(2,'0')}-${String(counter).padStart(4,'0')}`
+  }, [settings.invoicePrefix])
 
   const resetToDemo = useCallback(() => {
-    Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k))
-    initDemo(DEFAULT_SETTINGS)
+    Object.values(KEYS).forEach(k => localStorage.removeItem(k))
+    initDemo(DEFAULT_SETTINGS, SEED_BUILDINGS)
     setSettings(DEFAULT_SETTINGS)
   }, [initDemo])
 
   return (
-    <ElectricityCtx.Provider value={{
-      customers, readings, invoices, settings, isLoaded,
-      addCustomer, updateCustomer, removeCustomer,
-      upsertReadings, upsertInvoices, updateInvoice,
-      updateSettings, nextInvoiceNumber, resetToDemo,
+    <Ctx.Provider value={{
+      buildings, apartments, customers, readings, invoices, settings, isLoaded,
+      addBuilding, updateBuilding, removeBuilding,
+      addCustomer, updateCustomer, removeCustomer, offboardCustomer,
+      upsertReadings, upsertInvoices, updateInvoice, updateSettings,
+      nextInvoiceNumber, resetToDemo,
     }}>
       {children}
-    </ElectricityCtx.Provider>
+    </Ctx.Provider>
   )
 }
 
 export function useElectricity() {
-  const ctx = useContext(ElectricityCtx)
+  const ctx = useContext(Ctx)
   if (!ctx) throw new Error('useElectricity must be used within ElectricityProvider')
   return ctx
 }

@@ -6,6 +6,9 @@ export interface Building {
   state: string
   postcode: string
   totalUnits: number
+  lowUsageThreshold: number   // kWh/month – below = low (green)
+  highUsageThreshold: number  // kWh/month – above = high (amber)
+  notes?: string
 }
 
 export interface Apartment {
@@ -76,6 +79,7 @@ export interface ElectricityInvoice {
   gst: number
   total: number
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+  isFinalBill?: boolean
   paidDate?: string
   paidAmount?: number
   paymentReference?: string

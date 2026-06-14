@@ -1,8 +1,8 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Download, FileText, Building2, Users, CreditCard, Check, AlertCircle, Settings, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
+import { Download, FileText, Building2, Users, CreditCard, Check, AlertCircle, Settings } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
-import { BUILDINGS, APARTMENTS } from '@/lib/electricityData'
 import {
   formatAUD, monthName,
   generateABAFile, generateMYOBCustomerExport, generateMYOBInvoiceExport, generateMYOBReceiptsExport,
@@ -15,12 +15,10 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => {
 })
 
 export default function ExportsPage() {
-  const { customers, invoices, settings, updateSettings, isLoaded } = useElectricity()
+  const { customers, invoices, settings, buildings, apartments, isLoaded } = useElectricity()
   const [selectedMonth, setSelectedMonth] = useState(5)
   const [selectedYear, setSelectedYear] = useState(2026)
   const [toast, setToast] = useState('')
-  const [editSettings, setEditSettings] = useState(false)
-  const [settingsForm, setSettingsForm] = useState(settings)
 
   const monthInvoices = useMemo(() =>
     invoices.filter(i => i.month === selectedMonth && i.year === selectedYear),
@@ -47,13 +45,13 @@ export default function ExportsPage() {
   }
 
   function handleMYOBCustomers() {
-    const csv = generateMYOBCustomerExport(customers, APARTMENTS, BUILDINGS)
+    const csv = generateMYOBCustomerExport(customers, apartments, buildings)
     downloadFile(csv, `myob_customers_${Date.now()}.csv`, 'text/csv')
     showToast(`MYOB customer export downloaded — ${customers.length} customers`)
   }
 
   function handleMYOBInvoices() {
-    const csv = generateMYOBInvoiceExport(monthInvoices, customers, APARTMENTS, BUILDINGS)
+    const csv = generateMYOBInvoiceExport(monthInvoices, customers, apartments, buildings)
     downloadFile(csv, `myob_invoices_${selectedYear}${String(selectedMonth).padStart(2, '0')}.csv`, 'text/csv')
     showToast(`MYOB invoice export downloaded — ${monthInvoices.length} invoices`)
   }
@@ -63,12 +61,6 @@ export default function ExportsPage() {
     const paidCount = monthInvoices.filter(i => i.status === 'paid').length
     downloadFile(csv, `myob_receipts_${selectedYear}${String(selectedMonth).padStart(2, '0')}.csv`, 'text/csv')
     showToast(`MYOB receipts export downloaded — ${paidCount} payments`)
-  }
-
-  function handleSaveSettings() {
-    updateSettings(settingsForm)
-    setEditSettings(false)
-    showToast('Settings saved')
   }
 
   const totalDDAmount = ddInvoices.reduce((s, i) => s + i.total, 0)
@@ -94,10 +86,10 @@ export default function ExportsPage() {
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
             {MONTHS.map(opt => <option key={`${opt.year}-${opt.month}`} value={`${opt.year}-${opt.month}`}>{opt.label}</option>)}
           </select>
-          <button onClick={() => { setSettingsForm(settings); setEditSettings(true) }}
+          <Link href="/electricity/settings"
             className="flex items-center gap-2 px-3 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50">
             <Settings size={14} />Settings
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -241,7 +233,7 @@ export default function ExportsPage() {
             </tr>
           </thead>
           <tbody>
-            {BUILDINGS.map(b => {
+            {buildings.map(b => {
               const bInvs = monthInvoices.filter(i => i.buildingId === b.id)
               const bDDR = bInvs.filter(i => {
                 const c = customers.find(c => c.id === i.customerId)
@@ -285,81 +277,6 @@ export default function ExportsPage() {
         </table>
       </div>
 
-      {/* Settings Modal */}
-      {editSettings && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-              <h2 className="text-lg font-semibold text-slate-900">Billing Settings</h2>
-              <button onClick={() => setEditSettings(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
-            </div>
-            <div className="p-6 space-y-5">
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Company Details</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {(['companyName', 'abn', 'address', 'suburb', 'state', 'postcode', 'phone', 'email'] as const).map(key => (
-                    <div key={key}>
-                      <label className="block text-xs font-medium text-slate-600 mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
-                      <input value={settingsForm[key]} onChange={e => setSettingsForm(f => ({ ...f, [key]: e.target.value }))}
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Bank & ABA Settings</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {(['bankName', 'bsb', 'accountNumber', 'accountName', 'apcsUserId', 'institutionCode', 'bpayBillerCode'] as const).map(key => (
-                    <div key={key}>
-                      <label className="block text-xs font-medium text-slate-600 mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
-                      <input value={settingsForm[key]} onChange={e => setSettingsForm(f => ({ ...f, [key]: e.target.value }))}
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Tariff</p>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { key: 'ratePerKwh', label: 'Rate ($/kWh)' },
-                    { key: 'dailySupplyCharge', label: 'Supply Charge ($/day)' },
-                    { key: 'gstRate', label: 'GST Rate (e.g. 0.10)' },
-                  ].map(({ key, label }) => (
-                    <div key={key}>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-                      <input type="number" step="0.0001"
-                        value={settingsForm.tariff[key as keyof typeof settingsForm.tariff]}
-                        onChange={e => setSettingsForm(f => ({ ...f, tariff: { ...f.tariff, [key]: parseFloat(e.target.value) } }))}
-                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Invoice Settings</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Invoice Prefix</label>
-                    <input value={settingsForm.invoicePrefix} onChange={e => setSettingsForm(f => ({ ...f, invoicePrefix: e.target.value }))}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Payment Terms (days)</label>
-                    <input type="number" value={settingsForm.paymentTermsDays}
-                      onChange={e => setSettingsForm(f => ({ ...f, paymentTermsDays: parseInt(e.target.value) }))}
-                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
-              <button onClick={() => setEditSettings(false)} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-white">Cancel</button>
-              <button onClick={handleSaveSettings} className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">Save Settings</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
