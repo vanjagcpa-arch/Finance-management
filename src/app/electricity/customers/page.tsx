@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Users, Search, Plus, Edit2, Trash2, X, Building2, CreditCard, Mail, Phone, LogOut, AlertCircle } from 'lucide-react'
+import Link from 'next/link'
+import { Users, Search, Plus, Edit2, Trash2, X, Building2, CreditCard, Mail, Phone, LogOut, AlertCircle, UserPlus } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import type { Customer, PaymentMethod } from '@/lib/electricityTypes'
 import { formatAUD, calculateProRataBill } from '@/lib/electricityUtils'
@@ -111,9 +112,14 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><Users size={22} className="text-indigo-600" />Customers</h1>
           <p className="text-slate-500 text-sm mt-0.5">{activeCount} active · {movedCount} moved out</p>
         </div>
-        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
-          <Plus size={15} />Add Customer
-        </button>
+        <div className="flex gap-2">
+          <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50">
+            <Plus size={15} />Quick Add
+          </button>
+          <Link href="/electricity/onboard" className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+            <UserPlus size={15} />Onboard Tenant
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
