@@ -3,7 +3,6 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { FileText, Search, Filter, Send, RefreshCw, Check, ChevronDown, AlertCircle, Download } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
-import { BUILDINGS, APARTMENTS } from '@/lib/electricityData'
 import { formatAUD, monthName } from '@/lib/electricityUtils'
 import type { ElectricityInvoice } from '@/lib/electricityTypes'
 
@@ -13,7 +12,7 @@ const MONTHS = Array.from({ length: 12 }, (_, i) => {
 })
 
 export default function InvoicesPage() {
-  const { customers, invoices, readings, settings, upsertInvoices, updateInvoice, isLoaded } = useElectricity()
+  const { customers, invoices, readings, settings, buildings, apartments, upsertInvoices, updateInvoice, isLoaded } = useElectricity()
   const [selectedMonth, setSelectedMonth] = useState(5)
   const [selectedYear, setSelectedYear] = useState(2026)
   const [filterBuilding, setFilterBuilding] = useState('')
@@ -24,9 +23,9 @@ export default function InvoicesPage() {
   const [toast, setToast] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  const aptMap = useMemo(() => new Map(APARTMENTS.map(a => [a.id, a])), [])
+  const aptMap = useMemo(() => new Map(apartments.map(a => [a.id, a])), [apartments])
   const custMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
-  const bldMap = useMemo(() => new Map(BUILDINGS.map(b => [b.id, b])), [])
+  const bldMap = useMemo(() => new Map(buildings.map(b => [b.id, b])), [buildings])
 
   const monthInvoices = useMemo(() =>
     invoices.filter(i => i.month === selectedMonth && i.year === selectedYear),
@@ -196,7 +195,7 @@ export default function InvoicesPage() {
         <select value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
           <option value="">All Buildings</option>
-          {BUILDINGS.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-2 text-sm">

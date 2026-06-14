@@ -2,11 +2,10 @@
 import Link from 'next/link'
 import { Building2, Users, Zap, FileText, Download, TrendingUp, AlertCircle, CheckCircle2, Clock, ChevronRight } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
-import { BUILDINGS, APARTMENTS } from '@/lib/electricityData'
 import { formatAUD, monthName } from '@/lib/electricityUtils'
 
 export default function ElectricityDashboard() {
-  const { customers, invoices, readings, isLoaded } = useElectricity()
+  const { customers, invoices, readings, buildings, apartments, isLoaded } = useElectricity()
 
   if (!isLoaded) return (
     <div className="flex-1 flex items-center justify-center">
@@ -23,13 +22,13 @@ export default function ElectricityDashboard() {
   const totalOutstanding = monthInvoices.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((s, i) => s + i.total, 0)
   const overdueCount = monthInvoices.filter(i => i.status === 'overdue').length
   const collectionRate = totalBilled > 0 ? (totalPaid / totalBilled) * 100 : 0
-  const occupancy = customers.length > 0 ? (customers.filter(c => !c.moveOutDate).length / APARTMENTS.length) * 100 : 0
+  const occupancy = customers.length > 0 ? (customers.filter(c => !c.moveOutDate).length / apartments.length) * 100 : 0
 
   const stats = [
     { label: 'Total Billed', value: formatAUD(totalBilled), sub: monthName(latestMonth, latestYear), icon: FileText, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { label: 'Collected', value: formatAUD(totalPaid), sub: `${collectionRate.toFixed(1)}% collection rate`, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Outstanding', value: formatAUD(totalOutstanding), sub: `${overdueCount} overdue`, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'Occupancy', value: `${occupancy.toFixed(0)}%`, sub: `${customers.filter(c => !c.moveOutDate).length} of ${APARTMENTS.length} units`, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Occupancy', value: `${occupancy.toFixed(0)}%`, sub: `${customers.filter(c => !c.moveOutDate).length} of ${apartments.length} units`, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
   ]
 
   const quickActions = [
@@ -39,8 +38,8 @@ export default function ElectricityDashboard() {
     { href: '/electricity/customers', label: 'Manage Customers', icon: Users, desc: 'Add, edit, remove tenants' },
   ]
 
-  const buildingStats = BUILDINGS.map(b => {
-    const apts = APARTMENTS.filter(a => a.buildingId === b.id)
+  const buildingStats = buildings.map(b => {
+    const apts = apartments.filter(a => a.buildingId === b.id)
     const occupied = apts.filter(a => customers.find(c => c.apartmentId === a.id && !c.moveOutDate))
     const bInvoices = monthInvoices.filter(i => i.buildingId === b.id)
     const bTotal = bInvoices.reduce((s, i) => s + i.total, 0)
@@ -60,7 +59,7 @@ export default function ElectricityDashboard() {
             <Zap size={24} className="text-indigo-600" />
             Electricity Billing
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">{monthName(latestMonth, latestYear)} · 7 buildings · {APARTMENTS.length} apartments</p>
+          <p className="text-slate-500 text-sm mt-0.5">{monthName(latestMonth, latestYear)} · {buildings.length} buildings · {apartments.length} apartments</p>
         </div>
         <Link href="/electricity/invoices" className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
           <FileText size={15} />
@@ -146,7 +145,7 @@ export default function ElectricityDashboard() {
             <tfoot>
               <tr className="border-t-2 border-slate-200">
                 <td className="pt-2.5 font-semibold text-slate-700">Total</td>
-                <td className="pt-2.5 text-right font-semibold text-slate-700">{APARTMENTS.length}</td>
+                <td className="pt-2.5 text-right font-semibold text-slate-700">{apartments.length}</td>
                 <td className="pt-2.5 text-right font-semibold text-slate-700">{customers.filter(c => !c.moveOutDate).length}</td>
                 <td className="pt-2.5 text-right font-mono font-bold text-slate-900">{formatAUD(totalBilled)}</td>
                 <td></td>
@@ -211,7 +210,7 @@ export default function ElectricityDashboard() {
             <tbody>
               {recentInvoices.map(inv => {
                 const cust = customers.find(c => c.id === inv.customerId)
-                const bld = BUILDINGS.find(b => b.id === inv.buildingId)
+                const bld = buildings.find(b => b.id === inv.buildingId)
                 return (
                   <tr key={inv.id} className="data-row">
                     <td className="py-2.5">
@@ -220,7 +219,7 @@ export default function ElectricityDashboard() {
                       </Link>
                     </td>
                     <td className="py-2.5 text-slate-700">{cust ? `${cust.firstName} ${cust.lastName}` : '—'}</td>
-                    <td className="py-2.5 text-slate-500 text-xs">{bld?.name} · Unit {APARTMENTS.find(a => a.id === inv.apartmentId)?.unitNumber}</td>
+                    <td className="py-2.5 text-slate-500 text-xs">{bld?.name} · Unit {apartments.find(a => a.id === inv.apartmentId)?.unitNumber}</td>
                     <td className="py-2.5 text-right text-slate-600 font-mono">{inv.usage} kWh</td>
                     <td className="py-2.5 text-right font-mono font-medium text-slate-900">{formatAUD(inv.total)}</td>
                     <td className="py-2.5 text-center">

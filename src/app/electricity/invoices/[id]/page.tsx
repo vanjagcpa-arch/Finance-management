@@ -1,39 +1,65 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Printer, Send, Check, Zap, Building2, User, Calendar, CreditCard, BarChart3 } from 'lucide-react'
+import { ArrowLeft, Download, Send, Check, Zap, Building2, User, Calendar, CreditCard, AlertTriangle } from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell, ResponsiveContainer } from 'recharts'
 import { useElectricity } from '@/lib/ElectricityContext'
-import { BUILDINGS, APARTMENTS } from '@/lib/electricityData'
-import { formatAUD, formatDate, monthName } from '@/lib/electricityUtils'
+import { formatAUD, formatDate, monthName, getUsageHistory, usageColor, downloadFile } from '@/lib/electricityUtils'
 import type { ElectricityInvoice } from '@/lib/electricityTypes'
 
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { invoices, customers, settings, updateInvoice, readings, isLoaded } = useElectricity()
-  const [emailSent, setEmailSent] = useState(false)
-  const [sending, setSending] = useState(false)
+  const { invoices, customers, buildings, apartments, settings, updateInvoice, readings, isLoaded } = useElectricity()
+  const [emailSent,    setEmailSent]    = useState(false)
+  const [sending,      setSending]      = useState(false)
+  const [downloading,  setDownloading]  = useState(false)
 
-  const invoice = useMemo(() => invoices.find(i => i.id === id), [invoices, id])
+  const invoice  = useMemo(() => invoices.find(i => i.id === id), [invoices, id])
   const customer = useMemo(() => invoice ? customers.find(c => c.id === invoice.customerId) : undefined, [invoice, customers])
-  const apt = useMemo(() => invoice ? APARTMENTS.find(a => a.id === invoice.apartmentId) : undefined, [invoice])
-  const building = useMemo(() => apt ? BUILDINGS.find(b => b.id === apt.buildingId) : undefined, [apt])
-  const prevReading = useMemo(() => {
-    if (!invoice) return null
-    const prevMonth = invoice.month === 1 ? 12 : invoice.month - 1
-    const prevYear = invoice.month === 1 ? invoice.year - 1 : invoice.year
-    return readings.find(r => r.apartmentId === invoice.apartmentId && r.month === prevMonth && r.year === prevYear)
+  const apt      = useMemo(() => invoice ? apartments.find(a => a.id === invoice.apartmentId) : undefined, [invoice, apartments])
+  const building = useMemo(() => apt ? buildings.find(b => b.id === apt.buildingId) : undefined, [apt, buildings])
+
+  const usageHistory = useMemo(() => {
+    if (!invoice) return []
+    return getUsageHistory(invoice.apartmentId, readings, invoice.month, invoice.year, 12)
   }, [invoice, readings])
 
   const avgUsage = useMemo(() => {
-    if (!invoice) return 0
-    const aptReadings = readings.filter(r => r.apartmentId === invoice.apartmentId)
-    if (aptReadings.length === 0) return invoice.usage
-    return Math.round(aptReadings.reduce((s, r) => s + r.usage, 0) / aptReadings.length)
-  }, [invoice, readings])
+    const filled = usageHistory.filter(h => h.usage !== null)
+    if (!filled.length) return invoice?.usage ?? 0
+    return Math.round(filled.reduce((s, h) => s + (h.usage ?? 0), 0) / filled.length)
+  }, [usageHistory, invoice])
 
-  function handlePrint() {
-    window.print()
+  const chartData = useMemo(() => usageHistory.map(h => ({
+    label: h.label,
+    usage: h.usage ?? 0,
+    isCurrent: h.month === invoice?.month && h.year === invoice?.year,
+    color: usageColor(h.usage, building?.lowUsageThreshold ?? 180, building?.highUsageThreshold ?? 380),
+  })), [usageHistory, invoice, building])
+
+  async function handleDownloadPDF() {
+    if (!invoice || !customer || !apt || !building) return
+    setDownloading(true)
+    try {
+      const { pdf } = await import('@react-pdf/renderer')
+      const { default: InvoicePDF } = await import('@/components/electricity/InvoicePDF')
+      const blob = await pdf(
+        <InvoicePDF
+          invoice={invoice}
+          customer={customer}
+          apt={apt}
+          building={building}
+          settings={settings}
+          usageHistory={usageHistory}
+        />
+      ).toBlob()
+      downloadFile(blob, `${invoice.invoiceNumber}.pdf`, 'application/pdf')
+    } catch (e) {
+      console.error('PDF error', e)
+    } finally {
+      setDownloading(false)
+    }
   }
 
   function handleSend() {
@@ -55,16 +81,21 @@ export default function InvoiceDetailPage() {
     </div>
   )
 
-  const usagePct = Math.min(100, avgUsage > 0 ? (invoice.usage / avgUsage) * 100 : 100)
+  const usageDelta = invoice.usage - avgUsage
+  const low = building.lowUsageThreshold
+  const high = building.highUsageThreshold
 
   return (
     <>
-      {/* Screen toolbar - hidden when printing */}
+      {/* Toolbar */}
       <div className="print:hidden sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 transition-colors">
+        <button onClick={() => router.back()} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800">
           <ArrowLeft size={16} />Back to Invoices
         </button>
         <div className="flex items-center gap-2">
+          {invoice.isFinalBill && (
+            <span className="badge-danger flex items-center gap-1"><AlertTriangle size={11} />Final Bill</span>
+          )}
           <select value={invoice.status}
             onChange={e => updateInvoice({ ...invoice, status: e.target.value as ElectricityInvoice['status'] })}
             className={`text-xs rounded-full px-3 py-1.5 border font-medium cursor-pointer focus:outline-none
@@ -78,7 +109,6 @@ export default function InvoiceDetailPage() {
             <option value="overdue">Overdue</option>
             <option value="cancelled">Cancelled</option>
           </select>
-
           {!emailSent ? (
             <button onClick={handleSend} disabled={sending}
               className="flex items-center gap-2 px-4 py-2 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-50 disabled:opacity-50 transition-colors">
@@ -90,17 +120,18 @@ export default function InvoiceDetailPage() {
               <Check size={14} />Email Sent
             </span>
           )}
-          <button onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 transition-colors">
-            <Printer size={14} />Print / PDF
+          <button onClick={handleDownloadPDF} disabled={downloading}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-60 transition-colors">
+            <Download size={14} className={downloading ? 'animate-spin' : ''} />
+            {downloading ? 'Generating…' : 'Download PDF'}
           </button>
         </div>
       </div>
 
       {/* Invoice document */}
-      <div className="flex-1 overflow-y-auto bg-slate-100 print:bg-white py-8 print:py-0">
-        <div className="max-w-3xl mx-auto print:max-w-none">
-          <div className="bg-white shadow-xl rounded-2xl print:shadow-none print:rounded-none overflow-hidden">
+      <div className="flex-1 overflow-y-auto bg-slate-100 py-8">
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-white shadow-xl rounded-2xl overflow-hidden">
 
             {/* Header */}
             <div style={{ background: '#0c1120' }} className="px-10 py-8 flex items-start justify-between">
@@ -120,77 +151,100 @@ export default function InvoiceDetailPage() {
               </div>
               <div className="text-right">
                 <p className="text-4xl font-black text-white tracking-tight">INVOICE</p>
-                <div className="mt-2">
-                  <p className="text-indigo-400 font-mono text-sm font-bold">{invoice.invoiceNumber}</p>
-                  <span className={`inline-block mt-2 text-xs font-semibold px-3 py-1 rounded-full
+                <p className="text-indigo-400 font-mono text-sm font-bold mt-1">{invoice.invoiceNumber}</p>
+                <div className="flex flex-col items-end gap-1.5 mt-2">
+                  <span className={`inline-block text-xs font-semibold px-3 py-1 rounded-full
                     ${invoice.status === 'paid' ? 'bg-emerald-500 text-white' :
                       invoice.status === 'overdue' ? 'bg-red-500 text-white' :
                       invoice.status === 'sent' ? 'bg-indigo-500 text-white' :
                       'bg-slate-600 text-slate-200'}`}>
                     {invoice.status.toUpperCase()}
                   </span>
+                  {invoice.isFinalBill && (
+                    <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-red-500 text-white">
+                      FINAL BILL
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Invoice meta strip */}
+            {/* Meta strip */}
             <div className="bg-indigo-600 px-10 py-4 flex gap-8">
-              <div>
-                <p className="text-indigo-200 text-xs font-medium uppercase tracking-wider">Invoice Date</p>
-                <p className="text-white font-semibold text-sm mt-0.5">{formatDate(invoice.issueDate)}</p>
-              </div>
-              <div>
-                <p className="text-indigo-200 text-xs font-medium uppercase tracking-wider">Due Date</p>
-                <p className="text-white font-semibold text-sm mt-0.5">{formatDate(invoice.dueDate)}</p>
-              </div>
-              <div>
-                <p className="text-indigo-200 text-xs font-medium uppercase tracking-wider">Billing Period</p>
-                <p className="text-white font-semibold text-sm mt-0.5">{monthName(invoice.month, invoice.year)}</p>
-              </div>
+              <div><p className="text-indigo-200 text-xs font-medium uppercase tracking-wider">Invoice Date</p><p className="text-white font-semibold text-sm mt-0.5">{formatDate(invoice.issueDate)}</p></div>
+              <div><p className="text-indigo-200 text-xs font-medium uppercase tracking-wider">Due Date</p><p className="text-white font-semibold text-sm mt-0.5">{formatDate(invoice.dueDate)}</p></div>
+              <div><p className="text-indigo-200 text-xs font-medium uppercase tracking-wider">Billing Period</p><p className="text-white font-semibold text-sm mt-0.5">{monthName(invoice.month, invoice.year)}</p></div>
               {invoice.status === 'paid' && invoice.paidDate && (
-                <div className="ml-auto">
-                  <p className="text-emerald-200 text-xs font-medium uppercase tracking-wider">Paid On</p>
-                  <p className="text-white font-semibold text-sm mt-0.5">{formatDate(invoice.paidDate)}</p>
-                </div>
+                <div className="ml-auto"><p className="text-emerald-200 text-xs font-medium uppercase tracking-wider">Paid On</p><p className="text-white font-semibold text-sm mt-0.5">{formatDate(invoice.paidDate)}</p></div>
               )}
             </div>
 
             {/* Bill To / Property */}
             <div className="grid grid-cols-2 px-10 py-8 gap-8 border-b border-slate-100">
               <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <User size={14} className="text-slate-400" />
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Billed To</p>
-                </div>
+                <div className="flex items-center gap-2 mb-3"><User size={14} className="text-slate-400" /><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Billed To</p></div>
                 <p className="font-bold text-slate-900 text-lg">{customer.firstName} {customer.lastName}</p>
                 <p className="text-slate-600 text-sm mt-1">{customer.email}</p>
                 <p className="text-slate-600 text-sm">{customer.phone}</p>
                 <p className="text-slate-400 text-xs mt-2">Account: {customer.myobCardId}</p>
-                <p className="text-slate-400 text-xs">Move-in: {customer.moveInDate}</p>
+                {invoice.isFinalBill && customer.moveOutDate && (
+                  <p className="text-red-500 text-xs mt-1 font-medium">Move-out: {customer.moveOutDate}</p>
+                )}
               </div>
               <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Building2 size={14} className="text-slate-400" />
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Property</p>
-                </div>
+                <div className="flex items-center gap-2 mb-3"><Building2 size={14} className="text-slate-400" /><p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Property</p></div>
                 <p className="font-bold text-slate-900 text-lg">{building.name}</p>
                 <p className="text-slate-600 text-sm mt-1">Unit {apt.unitNumber}, Level {apt.floor}</p>
                 <p className="text-slate-600 text-sm">{building.address}</p>
                 <p className="text-slate-600 text-sm">{building.suburb} {building.state} {building.postcode}</p>
                 <p className="text-slate-400 text-xs mt-2">Meter: {apt.meterNumber}</p>
+                <p className="text-slate-400 text-xs">{invoice.billingPeriodStart} → {invoice.billingPeriodEnd} ({invoice.daysInPeriod} days)</p>
+              </div>
+            </div>
+
+            {/* 12-Month Usage History */}
+            <div className="px-10 py-7 bg-slate-50/50 border-b border-slate-100">
+              <div className="flex items-center gap-2 mb-1">
+                <Calendar size={14} className="text-indigo-600" />
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">12-Month Usage History</p>
+                <span className="ml-auto text-xs text-slate-400">Avg: {avgUsage} kWh/month</span>
+              </div>
+              <div className="flex items-center gap-4 mb-4 text-xs text-slate-400">
+                {[
+                  { color: 'bg-emerald-500', label: `Low (<${low} kWh)` },
+                  { color: 'bg-indigo-500',  label: 'Normal' },
+                  { color: 'bg-amber-500',   label: `High (>${high} kWh)` },
+                ].map(l => (
+                  <span key={l.label} className="flex items-center gap-1.5">
+                    <span className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
+                    {l.label}
+                  </span>
+                ))}
+              </div>
+              <div className="h-36">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} barSize={16} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      formatter={(v: number) => [`${v} kWh`, 'Usage']}
+                      contentStyle={{ background: '#0f172a', border: 'none', borderRadius: 8, color: '#e2e8f0', fontSize: 12 }}
+                    />
+                    <ReferenceLine y={avgUsage} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: 'avg', fill: '#94a3b8', fontSize: 9 }} />
+                    <Bar dataKey="usage" radius={[3, 3, 0, 0]}>
+                      {chartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} opacity={entry.isCurrent ? 1 : 0.75} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
 
             {/* Meter Readings */}
-            <div className="px-10 py-7 border-b border-slate-100 bg-slate-50/50">
-              <div className="flex items-center gap-2 mb-5">
-                <BarChart3 size={15} className="text-indigo-600" />
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Meter Readings</p>
-                <span className="text-xs text-slate-400 ml-auto">{invoice.billingPeriodStart} → {invoice.billingPeriodEnd} ({invoice.daysInPeriod} days)</span>
-              </div>
-
-              {/* Reading cards */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="px-10 py-7 border-b border-slate-100">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-5">Meter Readings</p>
+              <div className="grid grid-cols-3 gap-4">
                 <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
                   <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-2">Previous Reading</p>
                   <p className="text-2xl font-bold text-slate-700 font-mono">{invoice.previousReading.toLocaleString()}</p>
@@ -207,47 +261,32 @@ export default function InvoiceDetailPage() {
                   <p className="text-xs text-indigo-200 mt-1">kWh consumed</p>
                 </div>
               </div>
-
-              {/* Usage bar vs average */}
-              <div>
-                <div className="flex justify-between text-xs text-slate-400 mb-1.5">
-                  <span>Usage vs. historical average ({avgUsage} kWh)</span>
-                  <span className={invoice.usage > avgUsage ? 'text-amber-600 font-medium' : 'text-emerald-600 font-medium'}>
-                    {invoice.usage > avgUsage ? `+${invoice.usage - avgUsage} kWh above average` : `${avgUsage - invoice.usage} kWh below average`}
-                  </span>
-                </div>
-                <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${usagePct > 110 ? 'bg-amber-500' : 'bg-indigo-500'}`}
-                    style={{ width: `${Math.min(usagePct, 100)}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-slate-300 mt-1">
-                  <span>0 kWh</span>
-                  <span>{avgUsage} kWh avg</span>
-                </div>
+              <div className="mt-4 flex items-center gap-2 text-xs text-slate-400">
+                <span className={`font-medium ${usageDelta > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {usageDelta > 0 ? `▲ ${usageDelta} kWh above` : `▼ ${Math.abs(usageDelta)} kWh below`} 12-month average
+                </span>
+                <span className="text-slate-300">·</span>
+                <span className={`badge-${invoice.usage < low ? 'success' : invoice.usage > high ? 'warning' : 'neutral'}`}>
+                  {invoice.usage < low ? 'Low user' : invoice.usage > high ? 'High user' : 'Normal usage'}
+                </span>
               </div>
             </div>
 
             {/* Charges */}
             <div className="px-10 py-7">
-              <div className="flex items-center gap-2 mb-5">
-                <CreditCard size={15} className="text-indigo-600" />
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Charges</p>
-              </div>
-
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-5">Charges</p>
               <table className="w-full text-sm">
                 <tbody>
                   <tr className="border-b border-slate-100">
-                    <td className="py-3 text-slate-700">
-                      <span className="font-medium">Electricity usage</span>
+                    <td className="py-3">
+                      <span className="font-medium text-slate-700">Electricity usage</span>
                       <span className="text-slate-400 ml-2 text-xs">{invoice.usage.toLocaleString()} kWh × {(invoice.ratePerKwh * 100).toFixed(2)}¢/kWh</span>
                     </td>
                     <td className="py-3 text-right font-mono font-medium text-slate-900">{formatAUD(invoice.usageCharge)}</td>
                   </tr>
                   <tr className="border-b border-slate-100">
-                    <td className="py-3 text-slate-700">
-                      <span className="font-medium">Daily supply charge</span>
+                    <td className="py-3">
+                      <span className="font-medium text-slate-700">Daily supply charge</span>
                       <span className="text-slate-400 ml-2 text-xs">{invoice.daysInPeriod} days × ${settings.tariff.dailySupplyCharge.toFixed(4)}/day</span>
                     </td>
                     <td className="py-3 text-right font-mono font-medium text-slate-900">{formatAUD(invoice.supplyCharge)}</td>
@@ -262,12 +301,10 @@ export default function InvoiceDetailPage() {
                   </tr>
                 </tbody>
               </table>
-
-              {/* Total box */}
               <div className="mt-4 rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)' }}>
                 <div className="px-6 py-5 flex items-center justify-between">
                   <div>
-                    <p className="text-indigo-200 text-sm font-medium">Total Amount Due</p>
+                    <p className="text-indigo-200 text-sm font-medium">{invoice.isFinalBill ? 'Final Amount Due' : 'Total Amount Due'}</p>
                     <p className="text-indigo-200 text-xs mt-0.5">Including GST</p>
                   </div>
                   <div className="text-right">
@@ -278,14 +315,10 @@ export default function InvoiceDetailPage() {
               </div>
             </div>
 
-            {/* Payment Information */}
+            {/* Payment Info */}
             <div className="mx-10 mb-8 bg-slate-50 rounded-2xl p-6 border border-slate-200">
-              <div className="flex items-center gap-2 mb-4">
-                <CreditCard size={14} className="text-slate-500" />
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Payment Information</p>
-              </div>
-
-              <div className="space-y-4">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Payment Information</p>
+              <div className="space-y-3">
                 {customer.paymentMethod === 'direct_debit' && (
                   <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
                     <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -293,22 +326,17 @@ export default function InvoiceDetailPage() {
                     </div>
                     <div>
                       <p className="font-semibold text-indigo-900 text-sm">Direct Debit (DDR)</p>
-                      <p className="text-indigo-700 text-sm mt-0.5">
-                        {formatAUD(invoice.total)} will be automatically debited on <strong>{formatDate(invoice.dueDate)}</strong>
-                      </p>
-                      <p className="text-indigo-600 text-xs mt-1">
-                        From: {customer.accountName} · BSB: {customer.bsb} · Account: {customer.accountNumber}
-                      </p>
+                      <p className="text-indigo-700 text-sm mt-0.5">{formatAUD(invoice.total)} will be debited on <strong>{formatDate(invoice.dueDate)}</strong></p>
+                      <p className="text-indigo-600 text-xs mt-1">From: {customer.accountName} · BSB: {customer.bsb} · Account: {customer.accountNumber}</p>
                     </div>
                   </div>
                 )}
-
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {settings.bpayBillerCode && (
                     <div className="p-3 bg-white rounded-xl border border-slate-200">
                       <p className="font-semibold text-slate-700 mb-1.5">BPAY</p>
                       <p className="text-slate-500 text-xs">Biller Code: <span className="font-mono font-medium text-slate-700">{settings.bpayBillerCode}</span></p>
-                      <p className="text-slate-500 text-xs">Reference: <span className="font-mono font-medium text-slate-700">{invoice.invoiceNumber.replace(/-/g, '')}</span></p>
+                      <p className="text-slate-500 text-xs">Reference: <span className="font-mono font-medium text-slate-700">{invoice.invoiceNumber.replace(/-/g,'')}</span></p>
                     </div>
                   )}
                   <div className="p-3 bg-white rounded-xl border border-slate-200">
@@ -324,22 +352,12 @@ export default function InvoiceDetailPage() {
 
             {/* Footer */}
             <div style={{ background: '#f8fafc' }} className="border-t border-slate-200 px-10 py-5 flex items-center justify-between">
-              <p className="text-xs text-slate-400">
-                {settings.companyName} · ABN {settings.abn} · {settings.email} · {settings.phone}
-              </p>
+              <p className="text-xs text-slate-400">{settings.companyName} · ABN {settings.abn} · {settings.email} · {settings.phone}</p>
               <p className="text-xs text-slate-300 font-mono">{invoice.invoiceNumber}</p>
             </div>
-
           </div>
         </div>
       </div>
-
-      <style jsx global>{`
-        @media print {
-          body { background: white !important; }
-          .print\\:hidden { display: none !important; }
-        }
-      `}</style>
     </>
   )
 }

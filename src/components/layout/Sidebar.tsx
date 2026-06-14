@@ -23,6 +23,7 @@ const ELEC_NAV = [
   { href: '/electricity/usage', label: 'Meter Readings', icon: Upload },
   { href: '/electricity/invoices', label: 'Invoices', icon: FileText },
   { href: '/electricity/exports', label: 'Exports & ABA', icon: Download },
+  { href: '/electricity/settings', label: 'Settings', icon: Settings },
 ]
 
 export default function Sidebar() {

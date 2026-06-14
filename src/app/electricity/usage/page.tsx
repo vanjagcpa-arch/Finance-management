@@ -3,7 +3,6 @@ import { useState, useRef, useMemo } from 'react'
 import { Zap, Upload, Download, Check, AlertCircle, ChevronDown, X } from 'lucide-react'
 import Papa from 'papaparse'
 import { useElectricity } from '@/lib/ElectricityContext'
-import { BUILDINGS, APARTMENTS } from '@/lib/electricityData'
 import { downloadFile, generateUsageCSVTemplate, monthName } from '@/lib/electricityUtils'
 import type { MeterReading } from '@/lib/electricityTypes'
 
@@ -21,7 +20,7 @@ interface ParsedRow {
 }
 
 export default function UsagePage() {
-  const { readings, upsertReadings, settings, isLoaded } = useElectricity()
+  const { readings, upsertReadings, settings, buildings, apartments, isLoaded } = useElectricity()
   const [month, setMonth] = useState(5)
   const [year, setYear] = useState(2026)
   const [preview, setPreview] = useState<ParsedRow[]>([])
@@ -29,18 +28,18 @@ export default function UsagePage() {
   const [imported, setImported] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const aptMap = useMemo(() => new Map(APARTMENTS.map(a => [a.id, a])), [])
-  const aptByMeter = useMemo(() => new Map(APARTMENTS.map(a => [a.meterNumber.toUpperCase(), a])), [])
+  const aptMap = useMemo(() => new Map(apartments.map(a => [a.id, a])), [apartments])
+  const aptByMeter = useMemo(() => new Map(apartments.map(a => [a.meterNumber.toUpperCase(), a])), [apartments])
   const aptByUnit = useMemo(() => {
-    const m = new Map<string, typeof APARTMENTS[0]>()
-    APARTMENTS.forEach(a => {
-      const bld = BUILDINGS.find(b => b.id === a.buildingId)
+    const m = new Map<string, typeof apartments[0]>()
+    apartments.forEach(a => {
+      const bld = buildings.find(b => b.id === a.buildingId)
       const key = `${bld?.name?.toLowerCase()}-${a.unitNumber}`
       m.set(key, a)
     })
     return m
-  }, [])
-  const bldMap = useMemo(() => new Map(BUILDINGS.map(b => [b.id, b])), [])
+  }, [apartments, buildings])
+  const bldMap = useMemo(() => new Map(buildings.map(b => [b.id, b])), [buildings])
 
   const monthReadings = useMemo(() =>
     readings.filter(r => r.month === month && r.year === year),
@@ -48,7 +47,7 @@ export default function UsagePage() {
   )
 
   function downloadTemplate() {
-    const csv = generateUsageCSVTemplate(APARTMENTS, BUILDINGS)
+    const csv = generateUsageCSVTemplate(apartments, buildings)
     downloadFile(csv, `usage_template_${year}${String(month).padStart(2, '0')}.csv`, 'text/csv')
   }
 
@@ -140,8 +139,8 @@ export default function UsagePage() {
       <div className="grid grid-cols-3 gap-4">
         <div className="card p-4">
           <p className="kpi-label">Total Apartments</p>
-          <p className="kpi-value mt-1">{APARTMENTS.length}</p>
-          <p className="text-xs text-slate-400 mt-1">Across 7 buildings</p>
+          <p className="kpi-value mt-1">{apartments.length}</p>
+          <p className="text-xs text-slate-400 mt-1">Across {buildings.length} buildings</p>
         </div>
         <div className="card p-4">
           <p className="kpi-label">Readings Uploaded</p>
@@ -150,8 +149,8 @@ export default function UsagePage() {
         </div>
         <div className="card p-4">
           <p className="kpi-label">Missing Readings</p>
-          <p className={`kpi-value mt-1 ${APARTMENTS.length - monthReadings.length > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-            {APARTMENTS.length - monthReadings.length}
+          <p className={`kpi-value mt-1 ${apartments.length - monthReadings.length > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+            {apartments.length - monthReadings.length}
           </p>
           <p className="text-xs text-slate-400 mt-1">Still needed</p>
         </div>
@@ -240,7 +239,7 @@ export default function UsagePage() {
         <div className="px-5 py-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-slate-800">
             Readings for {monthName(month, year)}
-            <span className="ml-2 text-sm font-normal text-slate-400">({monthReadings.length} of {APARTMENTS.length})</span>
+            <span className="ml-2 text-sm font-normal text-slate-400">({monthReadings.length} of {apartments.length})</span>
           </h2>
         </div>
         <div className="max-h-96 overflow-y-auto">
