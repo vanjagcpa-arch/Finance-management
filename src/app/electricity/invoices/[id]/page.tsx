@@ -1,7 +1,7 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Download, Send, Check, Zap, Building2, User, Calendar, CreditCard, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Download, Send, Check, Zap, Building2, User, Calendar, CreditCard, AlertTriangle, ExternalLink } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell, ResponsiveContainer } from 'recharts'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { formatAUD, formatDate, monthName, getUsageHistory, usageColor, downloadFile } from '@/lib/electricityUtils'
@@ -75,6 +75,47 @@ export default function InvoiceDetailPage() {
       const pdfBase64 = Buffer.from(arrayBuf).toString('base64')
 
       const isDDR = customer.paymentMethod === 'direct_debit'
+
+      // Build portal URL with encoded invoice data
+      const portalData = {
+        customer: {
+          firstName: customer.firstName, lastName: customer.lastName,
+          email: customer.email, phone: customer.phone,
+          paymentMethod: customer.paymentMethod,
+          bsb: customer.bsb, accountNumber: customer.accountNumber, accountName: customer.accountName,
+        },
+        invoice: {
+          invoiceNumber: invoice.invoiceNumber,
+          period: monthName(invoice.month, invoice.year),
+          issueDate: invoice.issueDate, dueDate: invoice.dueDate,
+          total: invoice.total, usage: invoice.usage,
+          usageCharge: invoice.usageCharge, supplyCharge: invoice.supplyCharge,
+          subtotal: invoice.subtotal, gst: invoice.gst,
+          ratePerKwh: invoice.ratePerKwh, daysInPeriod: invoice.daysInPeriod,
+          gstRate: settings.tariff.gstRate, status: invoice.status,
+          isFinalBill: invoice.isFinalBill,
+          previousReading: invoice.previousReading, currentReading: invoice.currentReading,
+          billingPeriodStart: invoice.billingPeriodStart, billingPeriodEnd: invoice.billingPeriodEnd,
+        },
+        company: {
+          name: settings.companyName, email: settings.email, phone: settings.phone, abn: settings.abn,
+          bpayBillerCode: settings.bpayBillerCode,
+          bankBSB: settings.bsb, bankAccount: settings.accountNumber,
+          bankAccountName: settings.accountName, bankName: settings.bankName,
+        },
+        property: {
+          unitNumber: apt!.unitNumber, floor: apt!.floor, meterNumber: apt!.meterNumber,
+          buildingName: building!.name, buildingAddress: building!.address,
+          suburb: building!.suburb, state: building!.state, postcode: building!.postcode,
+        },
+        usageHistory: usageHistory.map(h => ({
+          label: h.label,
+          usage: h.usage,
+          isCurrent: h.month === invoice.month && h.year === invoice.year,
+        })),
+      }
+      const portalUrl = `${window.location.origin}/portal?d=${btoa(JSON.stringify(portalData))}`
+
       const res = await fetch('/api/send-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,6 +153,7 @@ export default function InvoiceDetailPage() {
           bankName: settings.bankName,
           pdfBase64,
           pdfFilename: `${invoice.invoiceNumber}.pdf`,
+          portalUrl,
         }),
       })
       const json = await res.json()
@@ -175,6 +217,21 @@ export default function InvoiceDetailPage() {
               <Check size={14} />Email Sent
             </span>
           )}
+          <button
+            onClick={() => {
+              if (!invoice || !customer || !apt || !building) return
+              const portalData = {
+                customer: { firstName: customer!.firstName, lastName: customer!.lastName, email: customer!.email, phone: customer!.phone, paymentMethod: customer!.paymentMethod, bsb: customer!.bsb, accountNumber: customer!.accountNumber, accountName: customer!.accountName },
+                invoice: { invoiceNumber: invoice!.invoiceNumber, period: monthName(invoice!.month, invoice!.year), issueDate: invoice!.issueDate, dueDate: invoice!.dueDate, total: invoice!.total, usage: invoice!.usage, usageCharge: invoice!.usageCharge, supplyCharge: invoice!.supplyCharge, subtotal: invoice!.subtotal, gst: invoice!.gst, ratePerKwh: invoice!.ratePerKwh, daysInPeriod: invoice!.daysInPeriod, gstRate: settings.tariff.gstRate, status: invoice!.status, isFinalBill: invoice!.isFinalBill, previousReading: invoice!.previousReading, currentReading: invoice!.currentReading, billingPeriodStart: invoice!.billingPeriodStart, billingPeriodEnd: invoice!.billingPeriodEnd },
+                company: { name: settings.companyName, email: settings.email, phone: settings.phone, abn: settings.abn, bpayBillerCode: settings.bpayBillerCode, bankBSB: settings.bsb, bankAccount: settings.accountNumber, bankAccountName: settings.accountName, bankName: settings.bankName },
+                property: { unitNumber: apt!.unitNumber, floor: apt!.floor, meterNumber: apt!.meterNumber, buildingName: building!.name, buildingAddress: building!.address, suburb: building!.suburb, state: building!.state, postcode: building!.postcode },
+                usageHistory: usageHistory.map(h => ({ label: h.label, usage: h.usage, isCurrent: h.month === invoice!.month && h.year === invoice!.year })),
+              }
+              window.open(`/portal?d=${btoa(JSON.stringify(portalData))}`, '_blank')
+            }}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
+            <ExternalLink size={14} />Tenant View
+          </button>
           <button onClick={handleDownloadPDF} disabled={downloading}
             className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-60 transition-colors">
             <Download size={14} className={downloading ? 'animate-spin' : ''} />

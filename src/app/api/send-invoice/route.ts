@@ -42,6 +42,8 @@ export interface SendInvoicePayload {
   // PDF (single-send only)
   pdfBase64?: string
   pdfFilename: string
+  // Tenant portal
+  portalUrl?: string
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -189,6 +191,16 @@ function buildEmail(p: SendInvoicePayload): string {
 
             <!-- Payment info -->
             ${paymentBlock}
+
+            <!-- Portal link -->
+            ${p.portalUrl ? `
+            <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0 0;">
+              <tr><td style="text-align:center;padding:20px;background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+                <p style="margin:0 0 8px;color:#334155;font-size:13px;font-weight:600;">View Invoice Online</p>
+                <p style="margin:0 0 12px;color:#64748b;font-size:12px;">Access your account, view usage history, and download invoices anytime.</p>
+                <a href="${p.portalUrl}" style="display:inline-block;background-color:#4f46e5;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;padding:10px 24px;border-radius:8px;">View Invoice Online</a>
+              </td></tr>
+            </table>` : ''}
 
             <!-- Contact -->
             <p style="margin:28px 0 0;color:#94a3b8;font-size:12px;line-height:1.6;">
