@@ -5,6 +5,7 @@ import {
   LayoutDashboard, FileBarChart2, CheckSquare,
   ShieldCheck, TrendingUp, Settings, ChevronRight,
   Zap, Users, Upload, FileText, Download,
+  BookOpen, Search, BarChart3, Scale, BookMarked, FolderOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { COMPANY_NAME } from '@/lib/demoData'
@@ -15,6 +16,15 @@ const NAV = [
   { href: '/eom-close', label: 'Month-End Close', icon: CheckSquare },
   { href: '/audit', label: 'Data Audit', icon: ShieldCheck },
   { href: '/strategy', label: 'Finance Strategy', icon: TrendingUp },
+]
+
+const ACCOUNTING_NAV = [
+  { href: '/accounting', label: 'Overview', icon: BookOpen, exact: true },
+  { href: '/accounting/import', label: 'Import Data', icon: Upload },
+  { href: '/accounting/audit', label: 'Audit & Validate', icon: Search },
+  { href: '/accounting/analysis', label: 'Analysis', icon: BarChart3 },
+  { href: '/accounting/reconciliations', label: 'Reconciliations', icon: Scale },
+  { href: '/accounting/journals', label: 'Journal Schedules', icon: BookMarked },
 ]
 
 const ELEC_NAV = [
@@ -28,6 +38,7 @@ const ELEC_NAV = [
 export default function Sidebar() {
   const pathname = usePathname()
   const inElec = pathname.startsWith('/electricity')
+  const inAccounting = pathname.startsWith('/accounting')
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex flex-col" style={{ width: 'var(--nav-width)', background: 'var(--nav-bg)' }}>
@@ -67,6 +78,33 @@ export default function Sidebar() {
             )
           })}
         </ul>
+
+        {/* Financial Accounting Section */}
+        <div className="mt-4">
+          <p className="text-nav-text text-xs font-medium uppercase tracking-wider px-2 mb-2">Financial Accounting</p>
+          <ul className="space-y-0.5">
+            {ACCOUNTING_NAV.map(({ href, label, icon: Icon, exact }) => {
+              const active = exact ? pathname === href : pathname.startsWith(href)
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
+                      active
+                        ? 'bg-nav-active text-nav-textActive'
+                        : 'text-nav-text hover:bg-nav-hover hover:text-nav-textActive'
+                    )}
+                  >
+                    <Icon size={16} className={cn('flex-shrink-0', active ? 'text-indigo-400' : 'text-nav-text group-hover:text-nav-textActive')} />
+                    <span className="flex-1">{label}</span>
+                    {active && <ChevronRight size={14} className="text-indigo-400" />}
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
 
         {/* Electricity Billing Section */}
         <div className="mt-4">
