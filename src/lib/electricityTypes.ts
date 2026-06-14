@@ -105,5 +105,6 @@ export interface ElectricitySettings {
   invoicePrefix: string
   paymentTermsDays: number
   bpayBillerCode: string
+  senderEmail: string
   tariff: Tariff
 }

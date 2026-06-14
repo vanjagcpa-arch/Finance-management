@@ -20,6 +20,7 @@ export default function InvoicesPage() {
   const [search, setSearch] = useState('')
   const [generating, setGenerating] = useState(false)
   const [sendingAll, setSendingAll] = useState(false)
+  const [sendProgress, setSendProgress] = useState<{ done: number; total: number } | null>(null)
   const [toast, setToast] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
@@ -111,14 +112,70 @@ export default function InvoicesPage() {
     }, 800)
   }
 
-  function markAllSent() {
-    setSendingAll(true)
+  async function markAllSent() {
     const drafts = filtered.filter(i => i.status === 'draft')
-    setTimeout(() => {
-      drafts.forEach(inv => updateInvoice({ ...inv, status: 'sent' }))
-      setSendingAll(false)
-      showToast(`${drafts.length} invoices marked as sent`)
-    }, 1000)
+    if (!drafts.length) return
+    setSendingAll(true)
+    setSendProgress({ done: 0, total: drafts.length })
+    let sent = 0
+    let failed = 0
+    for (const inv of drafts) {
+      const cust = custMap.get(inv.customerId)
+      if (!cust?.email) { failed++; continue }
+      const isDDR = cust.paymentMethod === 'direct_debit'
+      try {
+        const res = await fetch('/api/send-invoice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: cust.email,
+            customerFirstName: cust.firstName,
+            isDDR,
+            customerBSB: isDDR ? cust.bsb : undefined,
+            customerAccount: isDDR ? cust.accountNumber : undefined,
+            customerAccountName: isDDR ? cust.accountName : undefined,
+            invoiceNumber: inv.invoiceNumber,
+            period: `${monthName(inv.month, inv.year)}`,
+            issueDate: inv.issueDate,
+            dueDate: inv.dueDate,
+            isFinalBill: inv.isFinalBill ?? false,
+            usage: inv.usage,
+            usageCharge: inv.usageCharge,
+            supplyCharge: inv.supplyCharge,
+            subtotal: inv.subtotal,
+            gst: inv.gst,
+            total: inv.total,
+            ratePerKwh: inv.ratePerKwh,
+            dailySupplyCharge: settings.tariff.dailySupplyCharge,
+            daysInPeriod: inv.daysInPeriod,
+            gstRate: settings.tariff.gstRate,
+            companyName: settings.companyName,
+            fromEmail: settings.senderEmail,
+            companyEmail: settings.email,
+            companyPhone: settings.phone,
+            companyABN: settings.abn,
+            bpayBillerCode: settings.bpayBillerCode,
+            bankBSB: settings.bsb,
+            bankAccount: settings.accountNumber,
+            bankAccountName: settings.accountName,
+            bankName: settings.bankName,
+            pdfFilename: `${inv.invoiceNumber}.pdf`,
+          }),
+        })
+        if (res.ok) {
+          updateInvoice({ ...inv, status: 'sent' })
+          sent++
+        } else {
+          failed++
+        }
+      } catch {
+        failed++
+      }
+      setSendProgress({ done: sent + failed, total: drafts.length })
+    }
+    setSendingAll(false)
+    setSendProgress(null)
+    showToast(failed > 0 ? `Sent ${sent}, failed ${failed}` : `${sent} invoices sent successfully`)
   }
 
   function toggleSelect(id: string) {
@@ -163,7 +220,9 @@ export default function InvoicesPage() {
             <button onClick={markAllSent} disabled={sendingAll}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
               <Send size={14} className={sendingAll ? 'animate-pulse' : ''} />
-              {sendingAll ? 'Sending…' : `Send All (${draftCount})`}
+              {sendProgress
+                ? `Sending ${sendProgress.done}/${sendProgress.total}…`
+                : sendingAll ? 'Sending…' : `Send All (${draftCount})`}
             </button>
           )}
         </div>

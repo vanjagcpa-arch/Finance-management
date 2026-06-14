@@ -46,8 +46,18 @@ export default function UsagePage() {
     [readings, month, year]
   )
 
+  // Pre-build a map of latest current reading per apartment for auto-fill
+  const lastReadingMap = useMemo(() => {
+    const m = new Map<string, number>()
+    const sorted = [...readings].sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))
+    for (const r of sorted) {
+      if (!m.has(r.apartmentId)) m.set(r.apartmentId, r.currentReading)
+    }
+    return m
+  }, [readings])
+
   function downloadTemplate() {
-    const csv = generateUsageCSVTemplate(apartments, buildings)
+    const csv = generateUsageCSVTemplate(apartments, buildings, readings)
     downloadFile(csv, `usage_template_${year}${String(month).padStart(2, '0')}.csv`, 'text/csv')
   }
 
@@ -66,13 +76,16 @@ export default function UsagePage() {
           if (!apt && meterNum) apt = aptByMeter.get(meterNum)
           if (!apt && unitNum && buildingName) apt = aptByUnit.get(`${buildingName}-${unitNum}`)
 
-          const prev = parseFloat(row['Previous Reading (kWh)'] || row['Previous Reading'] || '0')
-          const curr = parseFloat(row['Current Reading (kWh)'] || row['Current Reading'] || '0')
+          const rawPrev = parseFloat(row['Previous Reading (kWh)'] || row['Previous Reading'] || '')
+          // Auto-fill previous reading from last stored current reading when CSV has blank/zero
+          const autoPrev = apt ? (lastReadingMap.get(apt.id) ?? 0) : 0
+          const prev = (!isNaN(rawPrev) && rawPrev > 0) ? rawPrev : autoPrev
+          const curr = parseFloat(row['Current Reading (kWh)'] || row['Current Reading'] || '')
           const date = row['Reading Date (YYYY-MM-DD)'] || row['Reading Date'] || `${year}-${String(month).padStart(2, '0')}-30`
           const bld = apt ? bldMap.get(apt.buildingId) : undefined
 
           const valid = !!apt && !isNaN(prev) && !isNaN(curr) && curr >= prev
-          const error = !apt ? 'Apartment not found' : isNaN(prev) || isNaN(curr) ? 'Invalid readings' : curr < prev ? 'Current < previous' : undefined
+          const error = !apt ? 'Apartment not found' : isNaN(curr) ? 'Missing current reading' : curr < prev ? 'Current < previous' : undefined
 
           return {
             apartmentId: apt?.id ?? '',
@@ -82,7 +95,7 @@ export default function UsagePage() {
             readingDate: date,
             previousReading: isNaN(prev) ? 0 : prev,
             currentReading: isNaN(curr) ? 0 : curr,
-            usage: isNaN(curr) || isNaN(prev) ? 0 : curr - prev,
+            usage: isNaN(curr) || isNaN(prev) ? 0 : Math.max(0, curr - prev),
             valid,
             error,
           }

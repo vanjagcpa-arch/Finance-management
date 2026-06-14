@@ -94,7 +94,7 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initialized = localStorage.getItem(KEYS.initialized)
-    const savedSettings: ElectricitySettings = JSON.parse(localStorage.getItem(KEYS.settings) ?? 'null') ?? DEFAULT_SETTINGS
+    const savedSettings: ElectricitySettings = { ...DEFAULT_SETTINGS, ...(JSON.parse(localStorage.getItem(KEYS.settings) ?? 'null') ?? {}) }
     setSettings(savedSettings)
 
     if (!initialized) {

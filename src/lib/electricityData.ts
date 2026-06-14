@@ -235,5 +235,6 @@ export const DEFAULT_SETTINGS: ElectricitySettings = {
   invoicePrefix: 'EL',
   paymentTermsDays: 21,
   bpayBillerCode: '123456',
+  senderEmail: 'electricity@meridianproperty.com.au',
   tariff: { ratePerKwh: 0.3276, dailySupplyCharge: 1.1524, gstRate: 0.10 },
 }
