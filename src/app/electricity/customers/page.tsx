@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { Users, Search, Plus, Edit2, Trash2, X, Building2, CreditCard, Mail, Phone, LogOut, AlertCircle, UserPlus } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
@@ -30,6 +30,19 @@ export default function CustomersPage() {
 
   const aptMap = useMemo(() => new Map(apartments.map(a => [a.id, a])), [apartments])
   const bldMap = useMemo(() => new Map(buildings.map(b => [b.id, b])), [buildings])
+
+  // Auto-open offboard modal when arriving from disconnection request email deep-link
+  useEffect(() => {
+    if (!isLoaded) return
+    const sp = new URLSearchParams(window.location.search)
+    const offboardParam = sp.get('offboard')
+    const dateParam     = sp.get('date')
+    if (offboardParam) {
+      setOffboardId(offboardParam)
+      if (dateParam) setMoveOutDate(dateParam)
+      setFinalReading(0)
+    }
+  }, [isLoaded])
 
   const offboardCustomerObj = offboardId ? customers.find(c => c.id === offboardId) : null
   const offboardApt = offboardCustomerObj ? aptMap.get(offboardCustomerObj.apartmentId) : null

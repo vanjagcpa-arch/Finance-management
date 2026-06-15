@@ -1,12 +1,13 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Zap, Download, Calendar, CreditCard, Building2, Check, AlertTriangle, Phone, Mail } from 'lucide-react'
+import { Zap, Download, Calendar, CreditCard, Building2, Check, AlertTriangle, Phone, Mail, LogOut, ChevronDown, ChevronUp, Send } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ReferenceLine, ResponsiveContainer } from 'recharts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface PortalData {
   customer: {
+    customerId?: string
     firstName: string; lastName: string; email: string; phone: string
     paymentMethod: 'direct_debit' | 'bpay' | 'eft'
     bsb?: string; accountNumber?: string; accountName?: string
@@ -23,6 +24,7 @@ interface PortalData {
     name: string; email: string; phone: string; abn: string
     bpayBillerCode: string; bankBSB: string; bankAccount: string
     bankAccountName: string; bankName: string
+    fromEmail?: string
   }
   property: {
     unitNumber: string; floor: number; meterNumber: string
@@ -40,9 +42,17 @@ const usageColor = (u: number | null) => {
   return '#4f46e5'
 }
 
+const today = new Date().toISOString().split('T')[0]
+
 export default function PortalPage() {
   const params = useSearchParams()
   const [downloading, setDownloading] = useState(false)
+  const [disconnectOpen, setDisconnectOpen] = useState(false)
+  const [moveOutDate, setMoveOutDate] = useState(today)
+  const [disconnectNotes, setDisconnectNotes] = useState('')
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [disconnectDone, setDisconnectDone] = useState(false)
+  const [disconnectError, setDisconnectError] = useState('')
 
   const data = useMemo<PortalData | null>(() => {
     const raw = params.get('d')
@@ -169,6 +179,46 @@ export default function PortalPage() {
 
   const isDDR = customer.paymentMethod === 'direct_debit'
   const bpayRef = inv.invoiceNumber.replace(/-/g, '')
+
+  async function handleDisconnectRequest() {
+    if (!moveOutDate) return
+    setDisconnecting(true)
+    setDisconnectError('')
+    try {
+      const origin = window.location.origin
+      const customerId = customer.customerId ?? ''
+      const processUrl = customerId
+        ? `${origin}/electricity/customers?offboard=${customerId}&date=${moveOutDate}`
+        : `${origin}/electricity/customers`
+
+      const res = await fetch('/api/send-disconnection-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId,
+          customerName: `${customer.firstName} ${customer.lastName}`,
+          customerEmail: customer.email,
+          unitNumber: property.unitNumber,
+          buildingName: property.buildingName,
+          invoiceNumber: inv.invoiceNumber,
+          moveOutDate,
+          notes: disconnectNotes || undefined,
+          companyName: company.name,
+          companyEmail: company.email,
+          fromEmail: company.fromEmail ?? company.email,
+          processUrl,
+          origin,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to submit')
+      setDisconnectDone(true)
+    } catch (e) {
+      setDisconnectError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDisconnecting(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-100">
@@ -362,6 +412,66 @@ export default function PortalPage() {
             <span className="font-mono">Meter: {property.meterNumber}</span>
           </div>
         </div>
+
+        {/* Disconnection Request */}
+        {!inv.isFinalBill && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <button
+              onClick={() => setDisconnectOpen(o => !o)}
+              className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 transition-colors">
+              <div className="flex items-center gap-2">
+                <LogOut size={15} className="text-amber-500" />
+                <span className="text-sm font-semibold text-slate-700">Request Service Disconnection</span>
+              </div>
+              {disconnectOpen ? <ChevronUp size={15} className="text-slate-400" /> : <ChevronDown size={15} className="text-slate-400" />}
+            </button>
+
+            {disconnectOpen && (
+              <div className="px-6 pb-6 border-t border-slate-100">
+                {disconnectDone ? (
+                  <div className="pt-5 text-center">
+                    <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <Check size={22} className="text-emerald-600" />
+                    </div>
+                    <p className="font-semibold text-slate-900 text-sm mb-1">Request Submitted</p>
+                    <p className="text-slate-500 text-xs">
+                      We&apos;ve received your disconnection request for <strong>{property.buildingName}, Unit {property.unitNumber}</strong>.
+                      A confirmation has been sent to {customer.email}.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="pt-4 space-y-4">
+                    <p className="text-sm text-slate-500">
+                      Planning to move out? Submit a disconnection request and we&apos;ll arrange a final meter reading and bill.
+                    </p>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Requested Move-out Date *</label>
+                      <input type="date" value={moveOutDate} onChange={e => setMoveOutDate(e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Notes (optional)</label>
+                      <textarea value={disconnectNotes} onChange={e => setDisconnectNotes(e.target.value)}
+                        rows={2} placeholder="Any additional information for the property manager…"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+                    </div>
+                    {disconnectError && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{disconnectError}</p>
+                    )}
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                      A final meter reading will be arranged on or around your move-out date.
+                      Your final bill will be emailed within 2 business days.
+                    </div>
+                    <button onClick={handleDisconnectRequest} disabled={disconnecting || !moveOutDate}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 transition-colors">
+                      <Send size={14} />{disconnecting ? 'Submitting…' : 'Submit Disconnection Request'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="bg-white rounded-2xl shadow-sm p-5">

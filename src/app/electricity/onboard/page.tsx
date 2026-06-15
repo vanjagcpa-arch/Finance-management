@@ -1,10 +1,10 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   UserPlus, Building2, User, CreditCard, Zap, Check, ArrowLeft, ArrowRight,
-  ChevronRight, Mail, Phone, AlertCircle, Send, ExternalLink,
+  ChevronRight, Mail, Phone, AlertCircle, Send, Info,
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import type { Customer, PaymentMethod } from '@/lib/electricityTypes'
@@ -50,11 +50,64 @@ const EMPTY: FormState = {
 export default function OnboardPage() {
   const router = useRouter()
   const { buildings, apartments, customers, readings, settings, addCustomer, upsertReadings, isLoaded } = useElectricity()
-  const [step, setStep]   = useState<Step>('unit')
-  const [form, setForm]   = useState<FormState>(EMPTY)
-  const [busy, setBusy]   = useState(false)
-  const [done, setDone]   = useState<{ customerId: string; customerName: string } | null>(null)
-  const [error, setError] = useState('')
+  const [step, setStep]       = useState<Step>('unit')
+  const [form, setForm]       = useState<FormState>(EMPTY)
+  const [busy, setBusy]       = useState(false)
+  const [done, setDone]       = useState<{ customerId: string; customerName: string } | null>(null)
+  const [error, setError]     = useState('')
+  const [prefillBanner, setPrefillBanner] = useState('')
+
+  // Pre-fill from ?prefill= deep-link (from connection request approval email)
+  useEffect(() => {
+    if (!isLoaded) return
+    const raw = new URLSearchParams(window.location.search).get('prefill')
+    if (!raw) return
+    try {
+      const p = JSON.parse(atob(raw)) as Partial<{
+        buildingName: string; unitNumber: string; moveInDate: string
+        firstName: string; lastName: string; email: string; phone: string
+        paymentMethod: PaymentMethod; bankName: string; bsb: string
+        accountNumber: string; accountName: string
+      }>
+
+      // Try to resolve buildingId + apartmentId from building/unit name
+      const matchedBuilding = buildings.find(b =>
+        b.name.toLowerCase() === (p.buildingName ?? '').toLowerCase()
+      )
+      const occupiedIds = new Set(customers.filter(c => !c.moveOutDate).map(c => c.apartmentId))
+      const matchedApt = matchedBuilding
+        ? apartments.find(a =>
+            a.buildingId === matchedBuilding.id &&
+            a.unitNumber.toLowerCase() === (p.unitNumber ?? '').toLowerCase() &&
+            !occupiedIds.has(a.id)
+          )
+        : undefined
+
+      setForm(f => ({
+        ...f,
+        buildingId:    matchedBuilding?.id ?? '',
+        apartmentId:   matchedApt?.id      ?? '',
+        moveInDate:    p.moveInDate    ?? f.moveInDate,
+        firstName:     p.firstName     ?? '',
+        lastName:      p.lastName      ?? '',
+        email:         p.email         ?? '',
+        phone:         p.phone         ?? '',
+        paymentMethod: p.paymentMethod ?? 'direct_debit',
+        bankName:      p.bankName      ?? '',
+        bsb:           p.bsb           ?? '',
+        accountNumber: p.accountNumber ?? '',
+        accountName:   p.accountName   ?? '',
+      }))
+      setPrefillBanner(
+        matchedApt
+          ? `Pre-filled from connection request — ${p.firstName} ${p.lastName}, Unit ${p.unitNumber}`
+          : `Pre-filled from connection request — please select the unit for ${p.firstName} ${p.lastName} (Unit ${p.unitNumber ?? '?'}, ${p.buildingName ?? '?'})`
+      )
+      if (matchedBuilding && matchedApt) setStep('details')
+    } catch {
+      // silently ignore bad prefill data
+    }
+  }, [isLoaded, buildings, apartments, customers])
 
   const occupiedAptIds = useMemo(
     () => new Set(customers.filter(c => !c.moveOutDate).map(c => c.apartmentId)),
@@ -257,6 +310,14 @@ export default function OnboardPage() {
             <p className="text-slate-500 text-sm mt-0.5">{vacantApts.length} vacant units available</p>
           </div>
         </div>
+
+        {/* Pre-fill banner */}
+        {prefillBanner && (
+          <div className="flex items-start gap-2 px-4 py-3 bg-sky-50 border border-sky-200 rounded-xl text-sm text-sky-800">
+            <Info size={15} className="text-sky-500 mt-0.5 flex-shrink-0" />
+            <span>{prefillBanner}</span>
+          </div>
+        )}
 
         {/* Progress bar */}
         <div className="card p-4">

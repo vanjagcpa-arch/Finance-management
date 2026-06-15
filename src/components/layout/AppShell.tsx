@@ -4,7 +4,7 @@ import Sidebar from './Sidebar'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const showSidebar = !pathname.startsWith('/portal')
+  const showSidebar = !pathname.startsWith('/portal') && !pathname.startsWith('/connect')
 
   return (
     <div className="flex h-screen overflow-hidden">
