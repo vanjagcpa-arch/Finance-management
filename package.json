@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
     "@fontsource/inter": "^5.2.8",
     "@react-pdf/renderer": "^4.5.1",
     "clsx": "^2.1.1",
