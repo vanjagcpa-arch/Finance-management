@@ -1,6 +1,6 @@
 'use client'
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
-import type { Building, Apartment, Customer, MeterReading, ElectricityInvoice, ElectricitySettings } from './electricityTypes'
+import type { Building, Apartment, Customer, MeterReading, ElectricityInvoice, ElectricitySettings, DebtorComm, DebtorStatus, PaymentPlan } from './electricityTypes'
 import {
   BUILDINGS as SEED_BUILDINGS,
   APARTMENTS as SEED_APARTMENTS,
@@ -13,14 +13,17 @@ import {
 import { calculateProRataBill } from './electricityUtils'
 
 const KEYS = {
-  buildings: 'elec_buildings_v2',
-  apartments: 'elec_apartments_v2',
-  customers:  'elec_customers_v2',
-  readings:   'elec_readings_v2',
-  invoices:   'elec_invoices_v2',
-  settings:   'elec_settings_v2',
-  initialized:'elec_init_v2',
-  counter:    'elec_counter_v2',
+  buildings:      'elec_buildings_v2',
+  apartments:     'elec_apartments_v2',
+  customers:      'elec_customers_v2',
+  readings:       'elec_readings_v2',
+  invoices:       'elec_invoices_v2',
+  settings:       'elec_settings_v2',
+  initialized:    'elec_init_v2',
+  counter:        'elec_counter_v2',
+  debtorComms:    'elec_debtor_comms_v2',
+  debtorStatuses: 'elec_debtor_statuses_v2',
+  paymentPlans:   'elec_payment_plans_v2',
 }
 
 interface ElectricityStore {
@@ -47,6 +50,13 @@ interface ElectricityStore {
   updateSettings: (s: ElectricitySettings) => void
   nextInvoiceNumber: (month: number, year: number) => string
   resetToDemo: () => void
+  // Debtors
+  debtorComms:    DebtorComm[]
+  debtorStatuses: DebtorStatus[]
+  paymentPlans:   PaymentPlan[]
+  addDebtorComm:    (c: DebtorComm) => void
+  setDebtorStatus:  (s: DebtorStatus) => void
+  upsertPaymentPlan:(p: PaymentPlan) => void
 }
 
 const Ctx = createContext<ElectricityStore | null>(null)
@@ -57,8 +67,11 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
   const [customers,  setCustomers]  = useState<Customer[]>([])
   const [readings,   setReadings]   = useState<MeterReading[]>([])
   const [invoices,   setInvoices]   = useState<ElectricityInvoice[]>([])
-  const [settings,   setSettings]   = useState<ElectricitySettings>(DEFAULT_SETTINGS)
-  const [isLoaded,   setIsLoaded]   = useState(false)
+  const [settings,       setSettings]       = useState<ElectricitySettings>(DEFAULT_SETTINGS)
+  const [isLoaded,       setIsLoaded]       = useState(false)
+  const [debtorComms,    setDebtorComms]    = useState<DebtorComm[]>([])
+  const [debtorStatuses, setDebtorStatuses] = useState<DebtorStatus[]>([])
+  const [paymentPlans,   setPaymentPlans]   = useState<PaymentPlan[]>([])
 
   const save = useCallback((key: string, data: unknown) => {
     try { localStorage.setItem(key, JSON.stringify(data)) } catch {}
@@ -106,6 +119,9 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
       setReadings(JSON.parse(localStorage.getItem(KEYS.readings) ?? '[]'))
       setInvoices(JSON.parse(localStorage.getItem(KEYS.invoices) ?? '[]'))
     }
+    setDebtorComms(JSON.parse(localStorage.getItem(KEYS.debtorComms) ?? '[]'))
+    setDebtorStatuses(JSON.parse(localStorage.getItem(KEYS.debtorStatuses) ?? '[]'))
+    setPaymentPlans(JSON.parse(localStorage.getItem(KEYS.paymentPlans) ?? '[]'))
     setIsLoaded(true)
   }, [initDemo])
 
@@ -256,10 +272,37 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
     return `${settings.invoicePrefix}-${year}${String(month).padStart(2,'0')}-${String(counter).padStart(4,'0')}`
   }, [settings.invoicePrefix])
 
+  const addDebtorComm = useCallback((c: DebtorComm) => {
+    setDebtorComms(prev => { const next = [...prev, c]; save(KEYS.debtorComms, next); return next })
+  }, [save])
+
+  const setDebtorStatus = useCallback((s: DebtorStatus) => {
+    setDebtorStatuses(prev => {
+      const next = prev.some(x => x.invoiceId === s.invoiceId)
+        ? prev.map(x => x.invoiceId === s.invoiceId ? s : x)
+        : [...prev, s]
+      save(KEYS.debtorStatuses, next)
+      return next
+    })
+  }, [save])
+
+  const upsertPaymentPlan = useCallback((p: PaymentPlan) => {
+    setPaymentPlans(prev => {
+      const next = prev.some(x => x.id === p.id)
+        ? prev.map(x => x.id === p.id ? p : x)
+        : [...prev, p]
+      save(KEYS.paymentPlans, next)
+      return next
+    })
+  }, [save])
+
   const resetToDemo = useCallback(() => {
     Object.values(KEYS).forEach(k => localStorage.removeItem(k))
     initDemo(DEFAULT_SETTINGS, SEED_BUILDINGS)
     setSettings(DEFAULT_SETTINGS)
+    setDebtorComms([])
+    setDebtorStatuses([])
+    setPaymentPlans([])
   }, [initDemo])
 
   return (
@@ -269,6 +312,8 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
       addCustomer, updateCustomer, removeCustomer, offboardCustomer,
       upsertReadings, upsertInvoices, updateInvoice, updateSettings,
       nextInvoiceNumber, resetToDemo,
+      debtorComms, debtorStatuses, paymentPlans,
+      addDebtorComm, setDebtorStatus, upsertPaymentPlan,
     }}>
       {children}
     </Ctx.Provider>
