@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { FileText, Search, Filter, Send, RefreshCw, Check, ChevronDown, AlertCircle, Download } from 'lucide-react'
+import { FileText, Search, Filter, Send, RefreshCw, Check, ChevronDown, AlertCircle, Download, Bell } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { formatAUD, monthName } from '@/lib/electricityUtils'
 import type { ElectricityInvoice } from '@/lib/electricityTypes'
@@ -21,6 +21,8 @@ export default function InvoicesPage() {
   const [generating, setGenerating] = useState(false)
   const [sendingAll, setSendingAll] = useState(false)
   const [sendProgress, setSendProgress] = useState<{ done: number; total: number } | null>(null)
+  const [sendingReminders, setSendingReminders] = useState(false)
+  const [reminderProgress, setReminderProgress] = useState<{ done: number; total: number } | null>(null)
   const [toast, setToast] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
@@ -186,8 +188,53 @@ export default function InvoicesPage() {
     })
   }
 
-  const totalBilled = filtered.reduce((s, i) => s + i.total, 0)
-  const draftCount = monthInvoices.filter(i => i.status === 'draft').length
+  const totalBilled  = filtered.reduce((s, i) => s + i.total, 0)
+  const draftCount   = monthInvoices.filter(i => i.status === 'draft').length
+  const overdueInvoices = monthInvoices.filter(i => i.status === 'overdue')
+
+  async function sendReminders() {
+    if (!overdueInvoices.length) return
+    setSendingReminders(true)
+    setReminderProgress({ done: 0, total: overdueInvoices.length })
+    const today = new Date()
+    let sent = 0, failed = 0
+    for (const inv of overdueInvoices) {
+      const cust = custMap.get(inv.customerId)
+      if (!cust?.email) { failed++; setReminderProgress({ done: ++sent + failed, total: overdueInvoices.length }); continue }
+      const daysPastDue = Math.max(0, Math.floor((today.getTime() - new Date(inv.dueDate + 'T00:00:00').getTime()) / 86400000))
+      const isDDR = cust.paymentMethod === 'direct_debit'
+      try {
+        const res = await fetch('/api/send-overdue-reminder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: cust.email,
+            customerFirstName: cust.firstName,
+            invoiceNumber: inv.invoiceNumber,
+            period: monthName(inv.month, inv.year),
+            dueDate: inv.dueDate,
+            daysPastDue,
+            total: inv.total,
+            isDDR,
+            bpayBillerCode: settings.bpayBillerCode,
+            bankBSB: settings.bsb,
+            bankAccount: settings.accountNumber,
+            bankAccountName: settings.accountName,
+            bankName: settings.bankName,
+            companyName: settings.companyName,
+            companyEmail: settings.email,
+            companyPhone: settings.phone,
+            fromEmail: settings.senderEmail,
+          }),
+        })
+        res.ok ? sent++ : failed++
+      } catch { failed++ }
+      setReminderProgress({ done: sent + failed, total: overdueInvoices.length })
+    }
+    setSendingReminders(false)
+    setReminderProgress(null)
+    showToast(failed > 0 ? `Reminders: ${sent} sent, ${failed} failed` : `${sent} reminder${sent !== 1 ? 's' : ''} sent`)
+  }
 
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>
 
@@ -216,6 +263,15 @@ export default function InvoicesPage() {
             <RefreshCw size={14} className={generating ? 'animate-spin' : ''} />
             {generating ? 'Generating…' : 'Generate Invoices'}
           </button>
+          {overdueInvoices.length > 0 && (
+            <button onClick={sendReminders} disabled={sendingReminders}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
+              <Bell size={14} className={sendingReminders ? 'animate-pulse' : ''} />
+              {reminderProgress
+                ? `Reminding ${reminderProgress.done}/${reminderProgress.total}…`
+                : `Send Reminders (${overdueInvoices.length})`}
+            </button>
+          )}
           {draftCount > 0 && (
             <button onClick={markAllSent} disabled={sendingAll}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
