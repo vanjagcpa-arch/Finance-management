@@ -237,15 +237,20 @@ export default function CustomersPage() {
                     <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded">{c.myobCardId}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(c)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"><Edit2 size={13} /></button>
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <button onClick={() => openEdit(c)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors">
+                        <Edit2 size={11} />Edit
+                      </button>
                       {!movedOut && (
                         <button onClick={() => { setOffboardId(c.id); setMoveOutDate(new Date().toISOString().split('T')[0]); setFinalReading(0) }}
                           className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Offboard customer">
                           <LogOut size={13} />
                         </button>
                       )}
-                      <button onClick={() => setDeleteId(c.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 size={13} /></button>
+                      <button onClick={() => setDeleteId(c.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete customer">
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </td>
                 </tr>
