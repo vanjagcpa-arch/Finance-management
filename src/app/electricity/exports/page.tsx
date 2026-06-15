@@ -3,19 +3,20 @@ import { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import {
   Download, FileText, Building2, Users, CreditCard, Check, AlertCircle,
-  Settings, ChevronDown, ChevronUp, Search, X, CheckSquare, Square,
-  Minus, ArrowRight,
+  Settings, Search, X, CheckSquare, Square,
+  Minus, Zap, Info,
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import {
   formatAUD, monthName,
   generateABAFileFromTransactions, generateMYOBDDRReceipts,
   generateMYOBCustomerExport, generateMYOBInvoiceExport, generateMYOBReceiptsExport,
+  generateEzidebitPaymentBatch, generateEzidebitCustomerRegistration,
   downloadFile,
 } from '@/lib/electricityUtils'
 import type { ABATransaction } from '@/lib/electricityUtils'
 
-type Tab = 'aba' | 'myob'
+type Tab = 'aba' | 'myob' | 'ezidebit'
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => {
   const d = new Date(2026, 5 - i, 1)
@@ -54,6 +55,13 @@ export default function ExportsPage() {
   // ── MYOB state ─────────────────────────────────────────────────────────────
   const [myobMonth, setMyobMonth] = useState(5)
   const [myobYear,  setMyobYear]  = useState(2026)
+
+  // ── Ezidebit state ─────────────────────────────────────────────────────────
+  const [eziMonth,  setEziMonth]  = useState(5)
+  const [eziYear,   setEziYear]   = useState(2026)
+  const [eziProcessDate, setEziProcessDate] = useState(todayStr)
+  const [eziStatuses, setEziStatuses] = useState<string[]>(['sent', 'overdue'])
+
   const [toast, setToast] = useState('')
 
   const aptMap  = useMemo(() => new Map(apartments.map(a => [a.id, a])), [apartments])
@@ -212,6 +220,39 @@ export default function ExportsPage() {
     showToast(`MYOB receipts exported — ${paid.length} records`)
   }
 
+  // ── Ezidebit handlers ──────────────────────────────────────────────────────
+  const eziMonthInvoices = useMemo(() =>
+    invoices.filter(i => i.month === eziMonth && i.year === eziYear),
+    [invoices, eziMonth, eziYear]
+  )
+
+  const eziEligibleInvoices = useMemo(() =>
+    eziMonthInvoices.filter(i => {
+      if (!eziStatuses.includes(i.status)) return false
+      const c = custMap.get(i.customerId)
+      return c?.paymentMethod === 'direct_debit'
+    }),
+    [eziMonthInvoices, eziStatuses, custMap]
+  )
+
+  function handleEziPaymentBatch() {
+    if (!eziEligibleInvoices.length) return
+    const csv = generateEzidebitPaymentBatch(eziMonthInvoices, customers, eziProcessDate, eziStatuses)
+    downloadFile(csv, `ezidebit_payments_${eziYear}${String(eziMonth).padStart(2,'0')}_${eziProcessDate.replace(/-/g,'')}.csv`, 'text/csv')
+    showToast(`Ezidebit payment batch exported — ${eziEligibleInvoices.length} transactions`)
+  }
+
+  function handleEziCustomerReg() {
+    const ddrCustomers = customers.filter(c => c.paymentMethod === 'direct_debit' && !c.moveOutDate)
+    const csv = generateEzidebitCustomerRegistration(customers, apartments, buildings)
+    downloadFile(csv, `ezidebit_customers_${todayStr()}.csv`, 'text/csv')
+    showToast(`Ezidebit customer registration exported — ${ddrCustomers.length} customers`)
+  }
+
+  function toggleEziStatus(s: string) {
+    setEziStatuses(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
+  }
+
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center text-slate-400">Loading…</div>
 
   return (
@@ -239,8 +280,9 @@ export default function ExportsPage() {
       {/* Tabs */}
       <div className="px-6 mt-4 flex gap-1 border-b border-slate-200 flex-shrink-0">
         {([
-          ['aba',  'ABA Direct Debit',  CreditCard],
-          ['myob', 'MYOB Exports',      FileText],
+          ['aba',      'ABA Direct Debit',  CreditCard],
+          ['myob',     'MYOB Exports',      FileText],
+          ['ezidebit', 'Ezidebit',          Zap],
         ] as [Tab, string, typeof CreditCard][]).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors
@@ -609,6 +651,233 @@ export default function ExportsPage() {
                 </tr>
               </tfoot>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── EZIDEBIT TAB ────────────────────────────────────────────────────── */}
+      {tab === 'ezidebit' && (
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+          {/* How-it-works banner */}
+          <div className="flex items-start gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+            <Info size={16} className="text-indigo-500 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-indigo-800 space-y-1">
+              <p className="font-semibold text-sm">Two-step Ezidebit workflow</p>
+              <p><span className="font-semibold">Step 1 (once):</span> Export &amp; upload the <span className="font-semibold">Customer Registration</span> file to Ezidebit → Customers → Import. This registers your tenants in Ezidebit so they can hold the bank details.</p>
+              <p><span className="font-semibold">Step 2 (monthly):</span> Export the <span className="font-semibold">Payment Batch</span> for each billing period and upload to Ezidebit → Payments → Upload Payment File. Ezidebit debits each customer for their invoice amount on the specified date.</p>
+              <p className="text-indigo-600">Once all customers are registered in Ezidebit, you can remove bank details from this app and store only the Ezidebit Customer ID against each tenant.</p>
+            </div>
+          </div>
+
+          {/* ── Payment Batch ── */}
+          <div className="card p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                <Download size={20} className="text-emerald-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-900">Payment Batch</h2>
+                <p className="text-xs text-slate-400">Monthly CSV uploaded to Ezidebit → Payments → Upload Payment File</p>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex flex-wrap gap-4 mb-5">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Billing Period</label>
+                <select value={`${eziYear}-${eziMonth}`}
+                  onChange={e => { const [y, m] = e.target.value.split('-'); setEziYear(+y); setEziMonth(+m) }}
+                  className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  {MONTHS.map(opt => <option key={`${opt.year}-${opt.month}`} value={`${opt.year}-${opt.month}`}>{opt.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Debit Date</label>
+                <input type="date" value={eziProcessDate} onChange={e => setEziProcessDate(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Include Statuses</label>
+                <div className="flex gap-2">
+                  {['sent','overdue','draft'].map(s => (
+                    <button key={s} onClick={() => toggleEziStatus(s)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                        eziStatuses.includes(s)
+                          ? s === 'draft' ? 'bg-slate-100 border-slate-300 text-slate-700' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
+                          : 'border-slate-200 text-slate-400 hover:bg-slate-50'
+                      }`}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Summary table */}
+            {eziEligibleInvoices.length > 0 ? (
+              <>
+                <div className="border border-slate-200 rounded-xl overflow-hidden mb-4">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="table-header text-left px-4 py-2.5">Customer</th>
+                        <th className="table-header text-left px-4 py-2.5">Bank Account</th>
+                        <th className="table-header text-left px-4 py-2.5">Invoice</th>
+                        <th className="table-header text-center px-4 py-2.5">Status</th>
+                        <th className="table-header text-right px-4 py-2.5">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {eziEligibleInvoices.map(inv => {
+                        const c = custMap.get(inv.customerId)
+                        if (!c) return null
+                        return (
+                          <tr key={inv.id} className="border-b border-slate-100 last:border-0">
+                            <td className="px-4 py-2.5">
+                              <p className="font-medium text-slate-800 text-xs">{c.firstName} {c.lastName}</p>
+                              <p className="text-xs text-slate-400">{c.email}</p>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <p className="text-xs text-slate-700">{c.accountName}</p>
+                              <p className="font-mono text-xs text-slate-400">{c.bsb.replace(/[^0-9]/g,'').slice(0,6)} / {c.accountNumber}</p>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <p className="font-mono text-xs text-indigo-600">{inv.invoiceNumber}</p>
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                inv.status === 'sent' ? 'bg-indigo-100 text-indigo-700' :
+                                inv.status === 'overdue' ? 'bg-red-100 text-red-700' :
+                                'bg-slate-100 text-slate-600'}`}>
+                                {inv.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-mono text-sm font-semibold text-slate-900">
+                              {formatAUD(inv.total)}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-200 bg-slate-50">
+                        <td colSpan={4} className="px-4 py-2.5 text-sm font-semibold text-slate-700">
+                          {eziEligibleInvoices.length} transactions · Debit date: {eziProcessDate}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold text-indigo-700">
+                          {formatAUD(eziEligibleInvoices.reduce((s, i) => s + i.total, 0))}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <button onClick={handleEziPaymentBatch}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors">
+                  <Download size={15} />Download Payment Batch CSV
+                  <span className="bg-emerald-500 text-white text-xs px-1.5 py-0.5 rounded-full">{eziEligibleInvoices.length}</span>
+                </button>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-500">
+                <AlertCircle size={15} className="text-slate-400 flex-shrink-0" />
+                No DDR invoices with status [{eziStatuses.join(', ')}] for {monthName(eziMonth, eziYear)}.
+              </div>
+            )}
+          </div>
+
+          {/* ── Customer Registration ── */}
+          <div className="card p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0">
+                <Users size={20} className="text-violet-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-900">Customer Registration</h2>
+                <p className="text-xs text-slate-400">One-time export — upload to Ezidebit → Customers → Import Customers</p>
+              </div>
+            </div>
+
+            {(() => {
+              const ddrCustomers = customers.filter(c => c.paymentMethod === 'direct_debit' && !c.moveOutDate)
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-4 mb-5">
+                    {[
+                      { label: 'DDR Customers', value: ddrCustomers.length, color: 'text-slate-900' },
+                      { label: 'With Bank Details', value: ddrCustomers.filter(c => c.bsb && c.accountNumber).length, color: 'text-emerald-700' },
+                      { label: 'Missing Bank Details', value: ddrCustomers.filter(c => !c.bsb || !c.accountNumber).length, color: 'text-amber-600' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+                        <p className="text-xs text-slate-500 mb-1">{s.label}</p>
+                        <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl mb-5 text-xs text-amber-800">
+                    <p className="font-semibold mb-1">What happens after you import this file into Ezidebit:</p>
+                    <ol className="space-y-1 list-none">
+                      {[
+                        'Ezidebit registers each customer with BillingCycleCode=M (monthly, variable amount)',
+                        'Ezidebit securely stores the bank details — you can then remove them from this app',
+                        'Going forward, upload a Payment Batch CSV each month with the invoice amounts',
+                        'Ezidebit debits each customer and you reconcile payments back here',
+                      ].map((s, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="w-4 h-4 rounded-full bg-amber-200 text-amber-800 font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">{i+1}</span>
+                          {s}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+
+                  <button onClick={handleEziCustomerReg}
+                    disabled={ddrCustomers.length === 0}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 disabled:opacity-40 transition-colors">
+                    <Download size={15} />Download Customer Registration CSV
+                    <span className="bg-violet-500 text-white text-xs px-1.5 py-0.5 rounded-full">{ddrCustomers.length}</span>
+                  </button>
+                </>
+              )
+            })()}
+          </div>
+
+          {/* Column reference */}
+          <div className="card p-5">
+            <h3 className="font-semibold text-slate-800 mb-3 text-sm">CSV Column Reference</h3>
+            <div className="grid grid-cols-2 gap-6 text-xs text-slate-600">
+              <div>
+                <p className="font-semibold text-slate-700 mb-2">Payment Batch columns</p>
+                {[
+                  ['YourSystemReference', 'Your customer ID — used to match to Ezidebit customer'],
+                  ['DebitDate', 'DD/MM/YYYY — when Ezidebit processes the debit'],
+                  ['PaymentAmountInCents', 'Invoice total in cents (e.g. 12550 = $125.50)'],
+                  ['YourPaymentReference', 'Invoice number — appears on bank statement'],
+                  ['PaymentDescription', 'Billing period description'],
+                ].map(([col, desc]) => (
+                  <div key={col} className="flex gap-2 py-1 border-b border-slate-100">
+                    <span className="font-mono text-indigo-600 w-44 flex-shrink-0">{col}</span>
+                    <span className="text-slate-500">{desc}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <p className="font-semibold text-slate-700 mb-2">Customer Registration columns</p>
+                {[
+                  ['YourSystemReference', 'Your customer ID — keep this to match future payments'],
+                  ['BankBSBNumber', '6 digits, no dash (e.g. 063123)'],
+                  ['BillingCycleCode', 'M = monthly variable amount (set per payment batch)'],
+                  ['PaymentAmountInCents', '0 = variable; Ezidebit uses amount from payment batch'],
+                  ['FirstScheduledPaymentDate', 'Registration date; actual debits set per batch'],
+                ].map(([col, desc]) => (
+                  <div key={col} className="flex gap-2 py-1 border-b border-slate-100">
+                    <span className="font-mono text-violet-600 w-44 flex-shrink-0">{col}</span>
+                    <span className="text-slate-500">{desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

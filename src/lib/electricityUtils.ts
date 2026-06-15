@@ -284,6 +284,123 @@ export function downloadFile(content: string | Blob, filename: string, mimeType 
   URL.revokeObjectURL(url)
 }
 
+// ── Ezidebit helpers ──────────────────────────────────────────────────────────
+
+function ezDate(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+
+function cleanBSB(bsb: string): string {
+  return bsb.replace(/[^0-9]/g, '').slice(0, 6)
+}
+
+/**
+ * Ezidebit Payment Batch CSV
+ * Upload to Ezidebit portal → Payments → Upload Payment File
+ * One row per DDR invoice for the selected month/status filter.
+ */
+export function generateEzidebitPaymentBatch(
+  invoices: ElectricityInvoice[],
+  customers: Customer[],
+  processDate: string,           // YYYY-MM-DD
+  statuses: string[] = ['sent', 'overdue'],
+): string {
+  const custMap = new Map(customers.map(c => [c.id, c]))
+  const headers = [
+    'YourSystemReference',
+    'LastName',
+    'FirstName',
+    'Email',
+    'BankAccountName',
+    'BankBSBNumber',
+    'BankAccountNumber',
+    'DebitDate',
+    'PaymentAmountInCents',
+    'YourPaymentReference',
+    'PaymentDescription',
+  ]
+  const rows: string[] = []
+  for (const inv of invoices) {
+    if (!statuses.includes(inv.status)) continue
+    const cust = custMap.get(inv.customerId)
+    if (!cust || cust.paymentMethod !== 'direct_debit') continue
+    rows.push(csvRow([
+      cust.id,
+      cust.lastName,
+      cust.firstName,
+      cust.email,
+      cust.accountName,
+      cleanBSB(cust.bsb),
+      cust.accountNumber,
+      ezDate(processDate),
+      Math.round(inv.total * 100),
+      inv.invoiceNumber,
+      `Electricity ${inv.month}/${inv.year}`,
+    ]))
+  }
+  return [csvRow(headers), ...rows].join('\n')
+}
+
+/**
+ * Ezidebit Customer Registration CSV
+ * Upload to Ezidebit portal → Customers → Import Customers
+ * Registers customers in Ezidebit without a fixed recurring amount
+ * (amounts vary each month, so payment batches are uploaded separately).
+ */
+export function generateEzidebitCustomerRegistration(
+  customers: Customer[],
+  apartments: Apartment[],
+  buildings: Building[],
+): string {
+  const aptMap = new Map(apartments.map(a => [a.id, a]))
+  const bldMap = new Map(buildings.map(b => [b.id, b]))
+  const today  = new Date().toISOString().split('T')[0]
+  const headers = [
+    'YourSystemReference',
+    'LastName',
+    'FirstName',
+    'EmailAddress',
+    'MobilePhoneNumber',
+    'AddressLine1',
+    'SuburbName',
+    'State',
+    'PostCode',
+    'BankAccountName',
+    'BankBSBNumber',
+    'BankAccountNumber',
+    'BillingCycleCode',    // M = monthly ad-hoc (amount supplied per batch)
+    'PaymentAmountInCents', // 0 = variable (amount set per payment batch)
+    'FirstScheduledPaymentDate',
+    'YourGeneralReference',
+  ]
+  const ddrCustomers = customers.filter(c => c.paymentMethod === 'direct_debit' && !c.moveOutDate)
+  const rows = ddrCustomers.map(c => {
+    const apt = aptMap.get(c.apartmentId)
+    const bld = apt ? bldMap.get(apt.buildingId) : undefined
+    const address = [bld?.address, bld?.suburb].filter(Boolean).join(', ')
+    return csvRow([
+      c.id,
+      c.lastName,
+      c.firstName,
+      c.email,
+      c.phone,
+      address || (bld?.name ?? ''),
+      bld?.suburb ?? '',
+      bld?.state ?? 'NSW',
+      bld?.postcode ?? '',
+      c.accountName,
+      cleanBSB(c.bsb),
+      c.accountNumber,
+      'M',
+      0,
+      ezDate(today),
+      `Unit ${apt?.unitNumber ?? ''} ${bld?.name ?? ''}`.trim(),
+    ])
+  })
+  return [csvRow(headers), ...rows].join('\n')
+}
+
 export function generateUsageCSVTemplate(apartments: Apartment[], buildings: Building[], readings: MeterReading[] = []): string {
   const bldMap = new Map(buildings.map(b => [b.id, b]))
   const headers = ['Apartment ID','Unit Number','Building','Meter Number','Reading Date (YYYY-MM-DD)','Previous Reading (kWh)','Current Reading (kWh)']
