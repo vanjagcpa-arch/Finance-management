@@ -1,14 +1,15 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   UserPlus, Building2, User, CreditCard, Zap, Check, ArrowLeft, ArrowRight,
-  ChevronRight, Mail, Phone, AlertCircle, Send, Info,
+  ChevronRight, Mail, Phone, AlertCircle, Send, Info, FileUp, Sparkles, ChevronDown, ChevronUp, X,
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import type { Customer, PaymentMethod } from '@/lib/electricityTypes'
 import { formatDate, monthName } from '@/lib/electricityUtils'
+import type { ExtractedCustomer } from '@/app/api/extract-customer-pdf/route'
 
 type Step = 'unit' | 'details' | 'payment' | 'reading' | 'confirm'
 const STEPS: Array<{ id: Step; label: string; icon: typeof User }> = [
@@ -56,6 +57,15 @@ export default function OnboardPage() {
   const [done, setDone]       = useState<{ customerId: string; customerName: string } | null>(null)
   const [error, setError]     = useState('')
   const [prefillBanner, setPrefillBanner] = useState('')
+
+  // PDF smart-import state
+  const [pdfOpen,      setPdfOpen]      = useState(false)
+  const [pdfFile,      setPdfFile]      = useState<File | null>(null)
+  const [pdfDragging,  setPdfDragging]  = useState(false)
+  const [pdfExtracting, setPdfExtracting] = useState(false)
+  const [pdfExtracted, setPdfExtracted] = useState<ExtractedCustomer | null>(null)
+  const [pdfError,     setPdfError]     = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Pre-fill from ?prefill= deep-link (from connection request approval email)
   useEffect(() => {
@@ -143,6 +153,69 @@ export default function OnboardPage() {
 
   function sf<K extends keyof FormState>(key: K, val: FormState[K]) {
     setForm(f => ({ ...f, [key]: val }))
+  }
+
+  async function handlePDFExtract(file: File) {
+    setPdfFile(file)
+    setPdfExtracted(null)
+    setPdfError('')
+    setPdfExtracting(true)
+    try {
+      const buf    = await file.arrayBuffer()
+      const base64 = Buffer.from(buf).toString('base64')
+      const res    = await fetch('/api/extract-customer-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: base64 }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Extraction failed')
+      setPdfExtracted(json.extracted)
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPdfExtracting(false)
+    }
+  }
+
+  function applyExtracted(p: ExtractedCustomer) {
+    const occupiedIds = new Set(customers.filter(c => !c.moveOutDate).map(c => c.apartmentId))
+    const matchedBuilding = p.buildingName
+      ? buildings.find(b => b.name.toLowerCase().includes(p.buildingName!.toLowerCase()) ||
+          p.buildingName!.toLowerCase().includes(b.name.toLowerCase()))
+      : undefined
+    const matchedApt = matchedBuilding && p.unitNumber
+      ? apartments.find(a =>
+          a.buildingId === matchedBuilding.id &&
+          a.unitNumber.toLowerCase() === p.unitNumber!.toLowerCase() &&
+          !occupiedIds.has(a.id)
+        )
+      : undefined
+
+    setForm(f => ({
+      ...f,
+      buildingId:    matchedBuilding?.id ?? f.buildingId,
+      apartmentId:   matchedApt?.id      ?? f.apartmentId,
+      firstName:     p.firstName     ?? f.firstName,
+      lastName:      p.lastName      ?? f.lastName,
+      email:         p.email         ?? f.email,
+      phone:         p.phone         ?? f.phone,
+      moveInDate:    p.moveInDate    ?? f.moveInDate,
+      paymentMethod: p.paymentMethod ?? f.paymentMethod,
+      bankName:      p.bankName      ?? f.bankName,
+      bsb:           p.bsb           ?? f.bsb,
+      accountNumber: p.accountNumber ?? f.accountNumber,
+      accountName:   p.accountName   ?? f.accountName,
+    }))
+    setPdfOpen(false)
+    setPdfExtracted(null)
+    setPdfFile(null)
+    setPrefillBanner(
+      matchedApt
+        ? `PDF imported — ${p.firstName ?? ''} ${p.lastName ?? ''}, Unit ${p.unitNumber} matched successfully`
+        : `PDF imported — ${p.firstName ?? ''} ${p.lastName ?? ''}${p.unitNumber ? ` (select unit ${p.unitNumber} manually)` : ''}`
+    )
+    setStep(matchedApt ? 'details' : 'unit')
   }
 
   const stepIdx = STEPS.findIndex(s => s.id === step)
@@ -309,6 +382,123 @@ export default function OnboardPage() {
             </h1>
             <p className="text-slate-500 text-sm mt-0.5">{vacantApts.length} vacant units available</p>
           </div>
+        </div>
+
+        {/* PDF Smart Import */}
+        <div className="card overflow-hidden">
+          <button
+            onClick={() => { setPdfOpen(o => !o); setPdfExtracted(null); setPdfError('') }}
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors text-left">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
+                <Sparkles size={14} className="text-violet-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Smart Import from PDF</p>
+                <p className="text-xs text-slate-400">Upload a completed application form — AI extracts and fills the fields</p>
+              </div>
+            </div>
+            {pdfOpen ? <ChevronUp size={15} className="text-slate-400" /> : <ChevronDown size={15} className="text-slate-400" />}
+          </button>
+
+          {pdfOpen && (
+            <div className="border-t border-slate-100 px-5 pb-5 pt-4 space-y-4">
+              {/* Drop zone */}
+              {!pdfExtracted && (
+                <div
+                  onDragOver={e => { e.preventDefault(); setPdfDragging(true) }}
+                  onDragLeave={() => setPdfDragging(false)}
+                  onDrop={e => {
+                    e.preventDefault(); setPdfDragging(false)
+                    const f = e.dataTransfer.files[0]
+                    if (f?.type === 'application/pdf') handlePDFExtract(f)
+                    else setPdfError('Please drop a PDF file.')
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`relative flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all
+                    ${pdfDragging ? 'border-violet-400 bg-violet-50' : 'border-slate-200 hover:border-violet-300 hover:bg-violet-50/50'}`}>
+                  <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handlePDFExtract(f) }} />
+                  {pdfExtracting ? (
+                    <>
+                      <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center">
+                        <Sparkles size={20} className="text-violet-600 animate-pulse" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-slate-700">Extracting data…</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Claude is reading {pdfFile?.name}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                        <FileUp size={20} className="text-slate-500" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-slate-700">Drop PDF here or click to browse</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Completed application / connection form</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {pdfError && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  <AlertCircle size={13} />{pdfError}
+                  <button onClick={() => setPdfError('')} className="ml-auto"><X size={13} /></button>
+                </div>
+              )}
+
+              {/* Extracted data preview */}
+              {pdfExtracted && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                    <Check size={15} className="text-emerald-600" />
+                    Extracted from {pdfFile?.name}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      ['Name',          `${pdfExtracted.firstName ?? ''} ${pdfExtracted.lastName ?? ''}`.trim()],
+                      ['Email',         pdfExtracted.email],
+                      ['Phone',         pdfExtracted.phone],
+                      ['Building',      pdfExtracted.buildingName],
+                      ['Unit',          pdfExtracted.unitNumber],
+                      ['Move-in Date',  pdfExtracted.moveInDate],
+                      ['Payment',       pdfExtracted.paymentMethod === 'direct_debit' ? 'Direct Debit'
+                                        : pdfExtracted.paymentMethod === 'bpay' ? 'BPAY' : pdfExtracted.paymentMethod ?? null],
+                      ['Bank',          pdfExtracted.bankName],
+                      ['BSB',           pdfExtracted.bsb],
+                      ['Account No.',   pdfExtracted.accountNumber],
+                      ['Account Name',  pdfExtracted.accountName],
+                      ['Notes',         pdfExtracted.notes],
+                    ] as [string, string | null][]).filter(([, v]) => v).map(([label, val]) => (
+                      <div key={label} className="bg-slate-50 rounded-lg px-3 py-2">
+                        <p className="text-xs text-slate-400 font-medium">{label}</p>
+                        <p className="text-sm text-slate-800 font-medium truncate">{val}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {pdfExtracted.notes && (
+                    <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                      <p className="text-xs font-medium text-amber-600 mb-0.5">Notes from form</p>
+                      <p className="text-sm text-amber-800">{pdfExtracted.notes}</p>
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setPdfExtracted(null); setPdfFile(null) }}
+                      className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">
+                      Try another
+                    </button>
+                    <button onClick={() => applyExtracted(pdfExtracted)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700">
+                      <Sparkles size={13} />Use This Data
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Pre-fill banner */}
