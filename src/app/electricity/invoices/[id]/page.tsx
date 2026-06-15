@@ -79,6 +79,7 @@ export default function InvoiceDetailPage() {
       // Build portal URL with encoded invoice data
       const portalData = {
         customer: {
+          customerId: customer.id,
           firstName: customer.firstName, lastName: customer.lastName,
           email: customer.email, phone: customer.phone,
           paymentMethod: customer.paymentMethod,
@@ -102,6 +103,7 @@ export default function InvoiceDetailPage() {
           bpayBillerCode: settings.bpayBillerCode,
           bankBSB: settings.bsb, bankAccount: settings.accountNumber,
           bankAccountName: settings.accountName, bankName: settings.bankName,
+          fromEmail: settings.senderEmail,
         },
         property: {
           unitNumber: apt!.unitNumber, floor: apt!.floor, meterNumber: apt!.meterNumber,
@@ -221,9 +223,9 @@ export default function InvoiceDetailPage() {
             onClick={() => {
               if (!invoice || !customer || !apt || !building) return
               const portalData = {
-                customer: { firstName: customer!.firstName, lastName: customer!.lastName, email: customer!.email, phone: customer!.phone, paymentMethod: customer!.paymentMethod, bsb: customer!.bsb, accountNumber: customer!.accountNumber, accountName: customer!.accountName },
+                customer: { customerId: customer!.id, firstName: customer!.firstName, lastName: customer!.lastName, email: customer!.email, phone: customer!.phone, paymentMethod: customer!.paymentMethod, bsb: customer!.bsb, accountNumber: customer!.accountNumber, accountName: customer!.accountName },
                 invoice: { invoiceNumber: invoice!.invoiceNumber, period: monthName(invoice!.month, invoice!.year), issueDate: invoice!.issueDate, dueDate: invoice!.dueDate, total: invoice!.total, usage: invoice!.usage, usageCharge: invoice!.usageCharge, supplyCharge: invoice!.supplyCharge, subtotal: invoice!.subtotal, gst: invoice!.gst, ratePerKwh: invoice!.ratePerKwh, daysInPeriod: invoice!.daysInPeriod, gstRate: settings.tariff.gstRate, status: invoice!.status, isFinalBill: invoice!.isFinalBill, previousReading: invoice!.previousReading, currentReading: invoice!.currentReading, billingPeriodStart: invoice!.billingPeriodStart, billingPeriodEnd: invoice!.billingPeriodEnd },
-                company: { name: settings.companyName, email: settings.email, phone: settings.phone, abn: settings.abn, bpayBillerCode: settings.bpayBillerCode, bankBSB: settings.bsb, bankAccount: settings.accountNumber, bankAccountName: settings.accountName, bankName: settings.bankName },
+                company: { name: settings.companyName, email: settings.email, phone: settings.phone, abn: settings.abn, bpayBillerCode: settings.bpayBillerCode, bankBSB: settings.bsb, bankAccount: settings.accountNumber, bankAccountName: settings.accountName, bankName: settings.bankName, fromEmail: settings.senderEmail },
                 property: { unitNumber: apt!.unitNumber, floor: apt!.floor, meterNumber: apt!.meterNumber, buildingName: building!.name, buildingAddress: building!.address, suburb: building!.suburb, state: building!.state, postcode: building!.postcode },
                 usageHistory: usageHistory.map(h => ({ label: h.label, usage: h.usage, isCurrent: h.month === invoice!.month && h.year === invoice!.year })),
               }
