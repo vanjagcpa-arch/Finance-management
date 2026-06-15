@@ -1,17 +1,18 @@
 'use client'
-import { useState } from 'react'
-import { Settings, Building2, Zap, CreditCard, Save, Plus, Edit2, Trash2, X, Check, AlertCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Settings, Building2, Zap, CreditCard, Save, Plus, Edit2, Trash2, X, Check, AlertCircle, Link2, RefreshCw, Users, FileText, ChevronRight, Loader2, Unlink, ExternalLink } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { generateApartmentsForBuilding } from '@/lib/electricityData'
 import type { Building, ElectricitySettings } from '@/lib/electricityTypes'
 
-type Tab = 'company' | 'buildings' | 'tariff' | 'banking'
+type Tab = 'company' | 'buildings' | 'tariff' | 'banking' | 'myob'
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Settings }> = [
   { id: 'company',   label: 'Company & Invoice', icon: Settings },
   { id: 'buildings', label: 'Buildings',          icon: Building2 },
   { id: 'tariff',    label: 'Electricity Tariff', icon: Zap },
   { id: 'banking',   label: 'Banking & ABA',      icon: CreditCard },
+  { id: 'myob',      label: 'MYOB',               icon: Link2 },
 ]
 
 const EMPTY_BUILDING: Omit<Building, 'id'> = {
@@ -19,8 +20,10 @@ const EMPTY_BUILDING: Omit<Building, 'id'> = {
   totalUnits: 80, lowUsageThreshold: 180, highUsageThreshold: 380, notes: '',
 }
 
+interface MYOBFile { Id: string; Name: string; Uri: string }
+
 export default function SettingsPage() {
-  const { settings, buildings, customers, apartments, updateSettings, addBuilding, updateBuilding, removeBuilding, resetToDemo, isLoaded } = useElectricity()
+  const { settings, buildings, customers, apartments, invoices, updateSettings, addBuilding, updateBuilding, removeBuilding, resetToDemo, isLoaded } = useElectricity()
   const [tab,   setTab]   = useState<Tab>('company')
   const [form,  setForm]  = useState<ElectricitySettings>(settings)
   const [saved, setSaved] = useState(false)
@@ -31,13 +34,52 @@ export default function SettingsPage() {
   const [bldUPF,    setBldUPF]    = useState(10)
   const [deleteBld, setDeleteBld] = useState<string | null>(null)
   const [toast, setToast] = useState('')
+  const [toastType, setToastType] = useState<'success' | 'error'>('success')
 
-  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3000) }
+  // MYOB states
+  const [myobFiles,         setMyobFiles]         = useState<MYOBFile[]>([])
+  const [myobFilesLoading,  setMyobFilesLoading]  = useState(false)
+  const [myobConnecting,    setMyobConnecting]     = useState(false)
+  const [myobSyncing,       setMyobSyncing]        = useState<'customers' | 'invoices' | null>(null)
+  const [myobSyncResult,    setMyobSyncResult]     = useState<string>('')
+  const [myobError,         setMyobError]          = useState('')
+
+  // Read OAuth callback tokens from URL on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const at  = sp.get('myob_at')
+    const rt  = sp.get('myob_rt')
+    const exp = sp.get('myob_exp')
+    const err = sp.get('myob_error')
+
+    if (err) {
+      setTab('myob')
+      setMyobError(`OAuth error: ${err}`)
+      window.history.replaceState({}, '', '/electricity/settings')
+      return
+    }
+    if (at && rt && exp) {
+      setTab('myob')
+      setForm(f => ({ ...f, myobAccessToken: at, myobRefreshToken: rt, myobTokenExpiry: exp }))
+      window.history.replaceState({}, '', '/electricity/settings')
+      showToast('MYOB connected successfully! Save settings to persist.', 'success')
+    }
+  }, [])
+
+  // Sync form when settings load
+  useEffect(() => { if (isLoaded) setForm(settings) }, [isLoaded, settings])
+
+  function showToast(msg: string, type: 'success' | 'error' = 'success') {
+    setToastType(type)
+    setToast(msg)
+    setTimeout(() => setToast(''), 4000)
+  }
 
   function handleSave() {
     updateSettings(form)
     setSaved(true)
-    showToast('Settings saved')
+    showToast('Settings saved', 'success')
     setTimeout(() => setSaved(false), 2000)
   }
 
@@ -60,21 +102,21 @@ export default function SettingsPage() {
     if (!bldForm.name || !bldForm.address) return
     if (editBld) {
       updateBuilding({ ...editBld, ...bldForm })
-      showToast(`${bldForm.name} updated`)
+      showToast(`${bldForm.name} updated`, 'success')
     } else {
       const newId = `b-${Date.now()}`
       const newBuilding: Building = { id: newId, ...bldForm, totalUnits: bldFloors * bldUPF }
       addBuilding(newBuilding)
-      showToast(`${bldForm.name} added with ${bldFloors * bldUPF} apartments`)
+      showToast(`${bldForm.name} added with ${bldFloors * bldUPF} apartments`, 'success')
     }
     setBldModal(false)
   }
 
   function handleDeleteBuilding(id: string) {
     const hasCustomers = customers.some(c => apartments.find(a => a.id === c.apartmentId)?.buildingId === id)
-    if (hasCustomers) { showToast('Cannot remove — building has active customers'); setDeleteBld(null); return }
+    if (hasCustomers) { showToast('Cannot remove — building has active customers', 'error'); setDeleteBld(null); return }
     removeBuilding(id)
-    showToast('Building removed')
+    showToast('Building removed', 'success')
     setDeleteBld(null)
   }
 
@@ -82,12 +124,12 @@ export default function SettingsPage() {
     setForm(f => ({ ...f, [key]: val }))
   }
 
-  function field(key: keyof ElectricitySettings, label: string, type = 'text') {
+  function field(key: keyof ElectricitySettings, label: string, type = 'text', placeholder?: string) {
     const val = form[key]
     return (
       <div key={key}>
         <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-        <input type={type} value={String(val ?? '')}
+        <input type={type} value={String(val ?? '')} placeholder={placeholder}
           onChange={e => sf(key, type === 'number' ? parseFloat(e.target.value) : e.target.value)}
           className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
       </div>
@@ -106,12 +148,155 @@ export default function SettingsPage() {
     )
   }
 
+  // MYOB helpers
+  const isMyobConnected = !!(form.myobAccessToken && form.myobTokenExpiry && new Date(form.myobTokenExpiry) > new Date())
+  const isMyobTokenExpired = !!(form.myobAccessToken && form.myobTokenExpiry && new Date(form.myobTokenExpiry) <= new Date())
+
+  async function handleMyobConnect() {
+    if (!form.myobClientId || !form.myobClientSecret) {
+      setMyobError('Enter your MYOB Client ID and Client Secret first.')
+      return
+    }
+    setMyobConnecting(true)
+    setMyobError('')
+    try {
+      const redirectUri = `${window.location.origin}/api/myob/callback`
+      const res = await fetch('/api/myob/start-oauth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: form.myobClientId, clientSecret: form.myobClientSecret, redirectUri }),
+      })
+      const data = await res.json()
+      if (data.error) { setMyobError(data.error); return }
+      // Save credentials before redirect so they persist
+      updateSettings({ ...form })
+      window.location.href = data.authUrl
+    } catch (err) {
+      setMyobError(String(err))
+    } finally {
+      setMyobConnecting(false)
+    }
+  }
+
+  function handleMyobDisconnect() {
+    setForm(f => ({
+      ...f,
+      myobAccessToken: '',
+      myobRefreshToken: '',
+      myobTokenExpiry: '',
+      myobCompanyFileUrl: '',
+      myobCompanyFileName: '',
+    }))
+    setMyobFiles([])
+    setMyobSyncResult('')
+    setMyobError('')
+    showToast('MYOB disconnected. Save to persist.', 'success')
+  }
+
+  async function handleLoadFiles() {
+    if (!form.myobAccessToken) return
+    setMyobFilesLoading(true)
+    setMyobError('')
+    try {
+      const res = await fetch(`/api/myob/list-files?accessToken=${encodeURIComponent(form.myobAccessToken)}`)
+      const data = await res.json()
+      if (data.error) { setMyobError(data.error); return }
+      setMyobFiles(data.files ?? [])
+      if (!data.files?.length) setMyobError('No company files found in this MYOB account.')
+    } catch (err) {
+      setMyobError(String(err))
+    } finally {
+      setMyobFilesLoading(false)
+    }
+  }
+
+  async function handleSyncCustomers() {
+    if (!form.myobAccessToken || !form.myobCompanyFileUrl) {
+      setMyobError('Select a company file first.')
+      return
+    }
+    setMyobSyncing('customers')
+    setMyobSyncResult('')
+    setMyobError('')
+    try {
+      const activeCustomers = customers.filter(c => !c.moveOutDate)
+      const res = await fetch('/api/myob/sync-customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: form.myobAccessToken,
+          companyFileUrl: form.myobCompanyFileUrl,
+          customers: activeCustomers,
+          buildings,
+          apartments,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) { setMyobError(data.error); return }
+      const now = new Date().toISOString()
+      setForm(f => ({ ...f, myobLastSyncCustomers: now }))
+      updateSettings({ ...form, myobLastSyncCustomers: now })
+      setMyobSyncResult(`Customers: ${data.created} created · ${data.updated} updated · ${data.failed} failed`)
+      if (data.errors?.length) setMyobError(data.errors.slice(0, 5).join('\n'))
+      else showToast(`Synced ${data.created + data.updated} customers to MYOB`, 'success')
+    } catch (err) {
+      setMyobError(String(err))
+    } finally {
+      setMyobSyncing(null)
+    }
+  }
+
+  async function handleSyncInvoices() {
+    if (!form.myobAccessToken || !form.myobCompanyFileUrl) {
+      setMyobError('Select a company file first.')
+      return
+    }
+    if (!form.myobIncomeAccountCode) {
+      setMyobError('Enter an income account code (e.g. 4-1000) first.')
+      return
+    }
+    setMyobSyncing('invoices')
+    setMyobSyncResult('')
+    setMyobError('')
+    try {
+      const syncableInvoices = invoices.filter(i => i.status === 'sent' || i.status === 'paid' || i.status === 'overdue')
+      const res = await fetch('/api/myob/sync-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: form.myobAccessToken,
+          companyFileUrl: form.myobCompanyFileUrl,
+          incomeAccountCode: form.myobIncomeAccountCode,
+          invoices: syncableInvoices,
+          customers,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) { setMyobError(data.error); return }
+      const now = new Date().toISOString()
+      setForm(f => ({ ...f, myobLastSyncInvoices: now }))
+      updateSettings({ ...form, myobLastSyncInvoices: now })
+      setMyobSyncResult(`Invoices: ${data.created} synced · ${data.skipped} skipped · ${data.failed} failed`)
+      if (data.errors?.length) setMyobError(data.errors.slice(0, 5).join('\n'))
+      else showToast(`Synced ${data.created} invoices to MYOB`, 'success')
+    } catch (err) {
+      setMyobError(String(err))
+    } finally {
+      setMyobSyncing(null)
+    }
+  }
+
+  function fmtDate(iso: string) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>
 
   return (
     <div className="flex-1 overflow-y-auto p-6 space-y-5">
       {toast && (
-        <div className="fixed top-4 right-4 z-50 bg-slate-900 text-white text-sm px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2">
+        <div className={`fixed top-4 right-4 z-50 text-white text-sm px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 ${toastType === 'error' ? 'bg-red-600' : 'bg-slate-900'}`}>
           <Check size={14} className="text-emerald-400" />{toast}
         </div>
       )}
@@ -119,19 +304,24 @@ export default function SettingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><Settings size={22} className="text-indigo-600" />Settings</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Company details, buildings, tariff rates, and banking</p>
+          <p className="text-slate-500 text-sm mt-0.5">Company details, buildings, tariff rates, banking, and MYOB sync</p>
         </div>
         <button onClick={() => { if (confirm('Reset all data to demo data? This cannot be undone.')) resetToDemo() }}
           className="text-xs text-slate-400 hover:text-red-500 transition-colors">Reset to Demo Data</button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex gap-1 border-b border-slate-200 flex-wrap">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors
               ${tab === t.id ? 'text-indigo-700 bg-white border border-slate-200 border-b-white -mb-px' : 'text-slate-500 hover:text-slate-700'}`}>
             <t.icon size={14} />{t.label}
+            {t.id === 'myob' && isMyobConnected && (
+              <span className="inline-flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />Connected
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -163,7 +353,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Email (Resend)</p>
-            <p className="text-xs text-slate-400 mb-3">The verified sender address configured in your Resend account. Invoices are sent from this address.</p>
+            <p className="text-xs text-slate-400 mb-3">The verified sender address configured in your Resend account.</p>
             <div className="grid grid-cols-2 gap-3">
               {field('senderEmail', 'Sender Email (From address)')}
             </div>
@@ -315,6 +505,211 @@ export default function SettingsPage() {
               <Save size={14} />{saved ? 'Saved!' : 'Save Banking Details'}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* MYOB */}
+      {tab === 'myob' && (
+        <div className="space-y-4">
+          {/* Connection status banner */}
+          {isMyobConnected ? (
+            <div className="card p-5 border-l-4 border-emerald-500">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                    <Check size={18} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">Connected to MYOB AccountRight</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Token expires {fmtDate(form.myobTokenExpiry)}
+                      {form.myobCompanyFileName && <> · Company: <strong>{form.myobCompanyFileName}</strong></>}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={handleMyobDisconnect}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">
+                  <Unlink size={12} />Disconnect
+                </button>
+              </div>
+            </div>
+          ) : isMyobTokenExpired ? (
+            <div className="card p-5 border-l-4 border-amber-400">
+              <div className="flex items-center gap-3">
+                <AlertCircle size={18} className="text-amber-500 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-slate-900">MYOB token expired</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Reconnect below to refresh your access token.</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="card p-5 border-l-4 border-slate-300">
+              <div className="flex items-center gap-3">
+                <Link2 size={18} className="text-slate-400 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-slate-900">Not connected to MYOB</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Enter your API credentials and click Connect to authorise via OAuth2.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* API Credentials */}
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">MYOB API Credentials</p>
+              <a href="https://my.myob.com.au/Bd/DevAppDetail.aspx" target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+                <ExternalLink size={11} />Get credentials from MYOB Developer Portal
+              </a>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {field('myobClientId', 'Client ID', 'text', 'Your MYOB API client ID')}
+              {field('myobClientSecret', 'Client Secret', 'password', '••••••••••••')}
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-500 mb-4">
+              <strong className="text-slate-700">Redirect URI to register in MYOB Developer Portal:</strong><br />
+              <code className="font-mono text-indigo-600">{typeof window !== 'undefined' ? window.location.origin : 'https://yourdomain.com'}/api/myob/callback</code>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={handleMyobConnect} disabled={myobConnecting || !form.myobClientId || !form.myobClientSecret}
+                className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors">
+                {myobConnecting ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+                {isMyobConnected ? 'Reconnect' : 'Connect to MYOB'}
+              </button>
+              <button onClick={handleSave}
+                className="flex items-center gap-2 px-5 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
+                <Save size={14} />Save Credentials
+              </button>
+            </div>
+          </div>
+
+          {/* Company File selection */}
+          {isMyobConnected && (
+            <div className="card p-6">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Company File</p>
+              <p className="text-xs text-slate-500 mb-3">Select which MYOB company file to sync data into.</p>
+              <div className="flex gap-3 mb-3">
+                <button onClick={handleLoadFiles} disabled={myobFilesLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-40">
+                  {myobFilesLoading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Load Company Files
+                </button>
+              </div>
+              {myobFiles.length > 0 && (
+                <div className="space-y-2">
+                  {myobFiles.map(f => (
+                    <label key={f.Id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors
+                      ${form.myobCompanyFileUrl === f.Uri ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                      <input type="radio" name="companyFile" value={f.Uri}
+                        checked={form.myobCompanyFileUrl === f.Uri}
+                        onChange={() => setForm(prev => ({ ...prev, myobCompanyFileUrl: f.Uri, myobCompanyFileName: f.Name }))}
+                        className="text-indigo-600" />
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{f.Name}</p>
+                        <p className="text-xs text-slate-400 font-mono">{f.Uri}</p>
+                      </div>
+                      {form.myobCompanyFileUrl === f.Uri && <Check size={14} className="text-indigo-600 ml-auto" />}
+                    </label>
+                  ))}
+                </div>
+              )}
+              {form.myobCompanyFileUrl && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Income Account Code</p>
+                  <p className="text-xs text-slate-500 mb-2">DisplayID of the income account for electricity revenue (e.g. <code className="font-mono bg-slate-100 px-1 rounded">4-1000</code>). Find it in your MYOB Chart of Accounts.</p>
+                  <input type="text" value={form.myobIncomeAccountCode} placeholder="4-1000"
+                    onChange={e => setForm(f => ({ ...f, myobIncomeAccountCode: e.target.value }))}
+                    className="w-48 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Sync controls */}
+          {isMyobConnected && form.myobCompanyFileUrl && (
+            <div className="card p-6">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Sync Data to MYOB</p>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Customers */}
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users size={16} className="text-indigo-600" />
+                    <p className="text-sm font-semibold text-slate-900">Customers</p>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Sync {customers.filter(c => !c.moveOutDate).length} active tenants as MYOB Customer Cards.
+                    {form.myobLastSyncCustomers && <><br />Last synced: {fmtDate(form.myobLastSyncCustomers)}</>}
+                  </p>
+                  <button onClick={handleSyncCustomers} disabled={!!myobSyncing}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 w-full justify-center">
+                    {myobSyncing === 'customers' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    {myobSyncing === 'customers' ? 'Syncing...' : 'Sync Customers'}
+                  </button>
+                </div>
+
+                {/* Invoices */}
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText size={16} className="text-indigo-600" />
+                    <p className="text-sm font-semibold text-slate-900">Invoices</p>
+                  </div>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Push {invoices.filter(i => i.status === 'sent' || i.status === 'paid' || i.status === 'overdue').length} sent/paid/overdue invoices as MYOB Service Invoices.
+                    {form.myobLastSyncInvoices && <><br />Last synced: {fmtDate(form.myobLastSyncInvoices)}</>}
+                  </p>
+                  <button onClick={handleSyncInvoices} disabled={!!myobSyncing || !form.myobIncomeAccountCode}
+                    title={!form.myobIncomeAccountCode ? 'Enter income account code above' : ''}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 w-full justify-center">
+                    {myobSyncing === 'invoices' ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    {myobSyncing === 'invoices' ? 'Syncing...' : 'Sync Invoices'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Sync result */}
+              {myobSyncResult && (
+                <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-800 font-medium">
+                  {myobSyncResult}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Error display */}
+          {myobError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-800 mb-1">Error</p>
+                <pre className="text-xs text-red-700 whitespace-pre-wrap font-mono">{myobError}</pre>
+                <button onClick={() => setMyobError('')} className="mt-2 text-xs text-red-500 underline">Dismiss</button>
+              </div>
+            </div>
+          )}
+
+          {/* How it works */}
+          {!isMyobConnected && !isMyobTokenExpired && (
+            <div className="card p-6">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">How MYOB Integration Works</p>
+              <ol className="space-y-3">
+                {[
+                  { n: '1', text: 'Register your app in the MYOB Developer Portal and copy your Client ID and Secret.' },
+                  { n: '2', text: 'Add the Redirect URI shown above to your MYOB app\'s allowed redirect URIs.' },
+                  { n: '3', text: 'Click "Connect to MYOB" — you\'ll be sent to the MYOB login page to authorise access.' },
+                  { n: '4', text: 'After authorising, you\'ll return here automatically and can select your company file.' },
+                  { n: '5', text: 'Use the sync buttons to push customers and invoices into MYOB AccountRight.' },
+                ].map(step => (
+                  <li key={step.n} className="flex items-start gap-3">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{step.n}</span>
+                    <p className="text-sm text-slate-600">{step.text}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
         </div>
       )}
 

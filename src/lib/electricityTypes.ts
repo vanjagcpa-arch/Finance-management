@@ -107,4 +107,15 @@ export interface ElectricitySettings {
   bpayBillerCode: string
   senderEmail: string
   tariff: Tariff
+  // MYOB API integration
+  myobClientId: string
+  myobClientSecret: string
+  myobAccessToken: string
+  myobRefreshToken: string
+  myobTokenExpiry: string        // ISO timestamp
+  myobCompanyFileUrl: string     // e.g. https://api.myob.com/accountright/{uid}
+  myobCompanyFileName: string
+  myobIncomeAccountCode: string  // DisplayID of the income account, e.g. "4-1000"
+  myobLastSyncCustomers: string  // ISO timestamp
+  myobLastSyncInvoices: string   // ISO timestamp
 }
