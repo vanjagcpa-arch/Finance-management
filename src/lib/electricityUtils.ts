@@ -324,7 +324,7 @@ export function generateEzidebitPaymentBatch(
   for (const inv of invoices) {
     if (!statuses.includes(inv.status)) continue
     const cust = custMap.get(inv.customerId)
-    if (!cust || cust.paymentMethod !== 'direct_debit') continue
+    if (!cust || (cust.paymentMethod !== 'direct_debit' && cust.paymentMethod !== 'ezidebit')) continue
     rows.push(csvRow([
       cust.id,
       cust.lastName,
@@ -374,7 +374,7 @@ export function generateEzidebitCustomerRegistration(
     'FirstScheduledPaymentDate',
     'YourGeneralReference',
   ]
-  const ddrCustomers = customers.filter(c => c.paymentMethod === 'direct_debit' && !c.moveOutDate)
+  const ddrCustomers = customers.filter(c => (c.paymentMethod === 'direct_debit' || c.paymentMethod === 'ezidebit') && !c.moveOutDate)
   const rows = ddrCustomers.map(c => {
     const apt = aptMap.get(c.apartmentId)
     const bld = apt ? bldMap.get(apt.buildingId) : undefined

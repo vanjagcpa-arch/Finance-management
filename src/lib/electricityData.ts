@@ -247,4 +247,5 @@ export const DEFAULT_SETTINGS: ElectricitySettings = {
   myobIncomeAccountCode: '',
   myobLastSyncCustomers: '',
   myobLastSyncInvoices: '',
+  ezidebitDigitalKey: '',
 }

@@ -1,11 +1,11 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Settings, Building2, Zap, CreditCard, Save, Plus, Edit2, Trash2, X, Check, AlertCircle, Link2, RefreshCw, Users, FileText, ChevronRight, Loader2, Unlink, ExternalLink } from 'lucide-react'
+import { Settings, Building2, Zap, CreditCard, Save, Plus, Edit2, Trash2, X, Check, AlertCircle, Link2, RefreshCw, Users, FileText, ChevronRight, Loader2, Unlink, ExternalLink, Shield } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { generateApartmentsForBuilding } from '@/lib/electricityData'
 import type { Building, ElectricitySettings } from '@/lib/electricityTypes'
 
-type Tab = 'company' | 'buildings' | 'tariff' | 'banking' | 'myob'
+type Tab = 'company' | 'buildings' | 'tariff' | 'banking' | 'myob' | 'ezidebit'
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Settings }> = [
   { id: 'company',   label: 'Company & Invoice', icon: Settings },
@@ -13,6 +13,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Settings }> = [
   { id: 'tariff',    label: 'Electricity Tariff', icon: Zap },
   { id: 'banking',   label: 'Banking & ABA',      icon: CreditCard },
   { id: 'myob',      label: 'MYOB',               icon: Link2 },
+  { id: 'ezidebit',  label: 'Ezidebit',           icon: Shield },
 ]
 
 const EMPTY_BUILDING: Omit<Building, 'id'> = {
@@ -710,6 +711,70 @@ export default function SettingsPage() {
               </ol>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Ezidebit */}
+      {tab === 'ezidebit' && (
+        <div className="space-y-4">
+          <div className="card p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+                <Shield size={18} className="text-violet-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">Ezidebit Direct Debit</p>
+                <p className="text-xs text-slate-500 mt-0.5">Australian payment processor for automated direct debits</p>
+              </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Digital Key (Public Key)
+              </label>
+              <p className="text-xs text-slate-400 mb-2">
+                Found in the Ezidebit Portal under Account → API Credentials. Used to build secure hosted DDR form links sent to new tenants.
+              </p>
+              <input
+                type="text"
+                value={form.ezidebitDigitalKey}
+                onChange={e => setForm(f => ({ ...f, ezidebitDigitalKey: e.target.value }))}
+                placeholder="e.g. A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+            {form.ezidebitDigitalKey && (
+              <div className="mb-4 bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs">
+                <p className="font-semibold text-violet-700 mb-1">Preview DDR form URL</p>
+                <code className="text-violet-600 break-all">
+                  {`https://secure.ezidebit.com.au/ddr/v2?q=${encodeURIComponent(form.ezidebitDigitalKey)}&ref=CUSTOMER_REF`}
+                </code>
+              </div>
+            )}
+            <div className="flex justify-end">
+              <button onClick={handleSave}
+                className="flex items-center gap-2 px-5 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700">
+                <Save size={14} />{saved ? 'Saved!' : 'Save Ezidebit Settings'}
+              </button>
+            </div>
+          </div>
+
+          <div className="card p-6">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">How Ezidebit Integration Works</p>
+            <ol className="space-y-3">
+              {[
+                { n: '1', text: 'Log in to the Ezidebit Portal and navigate to Account → API Credentials to find your Digital Key (public key).' },
+                { n: '2', text: 'Paste the Digital Key above and save. This key is used to build secure hosted DDR form URLs.' },
+                { n: '3', text: 'When onboarding a new tenant with "Ezidebit" payment method, a DDR invitation email is sent automatically with a unique link to complete their bank registration on Ezidebit\'s secure servers.' },
+                { n: '4', text: 'After the tenant completes the DDR form, Ezidebit assigns them a Customer Reference. Enter this in the tenant\'s profile as the Ezidebit Customer ID.' },
+                { n: '5', text: 'Use the Exports → Ezidebit tab to download a payment batch CSV each month and upload it to the Ezidebit Portal to trigger bulk direct debits.' },
+              ].map(step => (
+                <li key={step.n} className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs font-bold flex-shrink-0">{step.n}</span>
+                  <p className="text-sm text-slate-600">{step.text}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
         </div>
       )}
 

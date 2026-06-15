@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   UserPlus, Building2, User, CreditCard, Zap, Check, ArrowLeft, ArrowRight,
   ChevronRight, Mail, Phone, AlertCircle, Send, Info, FileUp, Sparkles, ChevronDown, ChevronUp, X,
+  Shield,
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import type { Customer, PaymentMethod } from '@/lib/electricityTypes'
@@ -33,6 +34,8 @@ interface FormState {
   bsb: string
   accountNumber: string
   accountName: string
+  ezidebitCustomerId: string
+  sendEzidebitDDR: boolean
   openingReading: string
   sendWelcome: boolean
 }
@@ -44,6 +47,8 @@ const EMPTY: FormState = {
   moveInDate: today,
   paymentMethod: 'direct_debit',
   bankName: '', bsb: '', accountNumber: '', accountName: '',
+  ezidebitCustomerId: '',
+  sendEzidebitDDR: true,
   openingReading: '',
   sendWelcome: true,
 }
@@ -225,6 +230,7 @@ export default function OnboardPage() {
     if (step === 'details') return !!form.firstName && !!form.lastName && !!form.email && !!form.moveInDate
     if (step === 'payment') {
       if (form.paymentMethod === 'direct_debit') return !!form.bankName && !!form.bsb && !!form.accountNumber && !!form.accountName
+      if (form.paymentMethod === 'ezidebit') return true  // bank details held by Ezidebit
       return true
     }
     if (step === 'reading') return true // optional
@@ -258,11 +264,12 @@ export default function OnboardPage() {
         phone: form.phone,
         moveInDate: form.moveInDate,
         paymentMethod: form.paymentMethod,
-        bankName: form.bankName,
-        bsb: form.bsb,
-        accountNumber: form.accountNumber,
-        accountName: form.accountName,
+        bankName: form.paymentMethod === 'ezidebit' ? '' : form.bankName,
+        bsb: form.paymentMethod === 'ezidebit' ? '' : form.bsb,
+        accountNumber: form.paymentMethod === 'ezidebit' ? '' : form.accountNumber,
+        accountName: form.paymentMethod === 'ezidebit' ? '' : form.accountName,
         myobCardId: myobId,
+        ezidebitCustomerId: form.ezidebitCustomerId || undefined,
       }
       addCustomer(customer)
 
@@ -321,6 +328,31 @@ export default function OnboardPage() {
           })
         } catch {
           // welcome email failure is non-fatal
+        }
+      }
+
+      // Send Ezidebit DDR registration email
+      if (form.paymentMethod === 'ezidebit' && form.sendEzidebitDDR && form.email) {
+        try {
+          await fetch('/api/send-ezidebit-ddr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: form.email,
+              firstName: form.firstName,
+              unitNumber: selectedApt?.unitNumber ?? '',
+              buildingName: selectedBld?.name ?? '',
+              buildingAddress: selectedBld?.address ?? '',
+              customerId,
+              ezidebitDigitalKey: settings.ezidebitDigitalKey ?? '',
+              companyName: settings.companyName,
+              fromEmail: settings.senderEmail || settings.email,
+              companyEmail: settings.email,
+              companyPhone: settings.phone,
+            }),
+          })
+        } catch {
+          // non-fatal — tenant can be sent the link manually later
         }
       }
 
@@ -630,22 +662,29 @@ export default function OnboardPage() {
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-2">Payment Method</label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {([
-                    ['direct_debit','Direct Debit','Automatically debited on due date'],
-                    ['bpay','BPAY','Tenant pays via BPAY reference'],
+                    ['direct_debit','Direct Debit','Debited via your ABA file'],
+                    ['ezidebit','Ezidebit DDR','Debited via Ezidebit — bank details stored by Ezidebit, not this app'],
+                    ['bpay','BPAY','Tenant pays via BPAY'],
                     ['eft','EFT Transfer','Tenant pays via bank transfer'],
                   ] as [PaymentMethod, string, string][]).map(([val, lbl, desc]) => (
                     <button key={val} onClick={() => sf('paymentMethod', val)}
                       className={`text-left p-3.5 rounded-xl border-2 transition-all
-                        ${form.paymentMethod === val ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <p className="font-semibold text-slate-900 text-sm">{lbl}</p>
-                      <p className="text-xs text-slate-500 mt-1 leading-tight">{desc}</p>
+                        ${form.paymentMethod === val
+                          ? val === 'ezidebit' ? 'border-violet-500 bg-violet-50' : 'border-indigo-500 bg-indigo-50'
+                          : 'border-slate-200 hover:border-slate-300'}`}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <p className={`font-semibold text-sm ${form.paymentMethod === val && val === 'ezidebit' ? 'text-violet-900' : 'text-slate-900'}`}>{lbl}</p>
+                        {val === 'ezidebit' && <span className="text-xs bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded font-medium">Recommended</span>}
+                      </div>
+                      <p className="text-xs text-slate-500 leading-tight">{desc}</p>
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* Direct Debit — bank details stored in app */}
               {form.paymentMethod === 'direct_debit' && (
                 <div>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Bank Account for Direct Debit</p>
@@ -661,6 +700,62 @@ export default function OnboardPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Ezidebit DDR — bank details held by Ezidebit */}
+              {form.paymentMethod === 'ezidebit' && (
+                <div className="space-y-4">
+                  {/* Security callout */}
+                  <div className="flex items-start gap-3 p-4 bg-violet-50 border border-violet-200 rounded-xl">
+                    <Shield size={16} className="text-violet-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-xs text-violet-800">
+                      <p className="font-semibold mb-1">Bank details stored securely by Ezidebit — not in this app</p>
+                      <p className="leading-relaxed">The tenant registers their bank account directly on Ezidebit&apos;s secure platform. You never handle the raw account numbers, and they are never saved in this system.</p>
+                    </div>
+                  </div>
+
+                  {/* Send registration email toggle */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-3 cursor-pointer" onClick={() => sf('sendEzidebitDDR', !form.sendEzidebitDDR)}>
+                      <div className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative ${form.sendEzidebitDDR ? 'bg-violet-600' : 'bg-slate-200'}`}>
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.sendEzidebitDDR ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </div>
+                      <span className="text-sm font-medium text-slate-700">Send DDR registration link to tenant</span>
+                    </label>
+                    {form.sendEzidebitDDR && form.email && (
+                      <p className="text-xs text-slate-500 ml-13 pl-0.5">
+                        An email will be sent to <strong>{form.email}</strong> with a secure link to register their bank details directly with Ezidebit.
+                        {!settings.ezidebitDigitalKey && (
+                          <span className="text-amber-600 font-medium"> Add your Ezidebit Digital Key in Settings to include the registration link in the email.</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Existing Ezidebit Customer ID */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Ezidebit Customer ID <span className="text-slate-400 font-normal">(optional — leave blank for new registrations)</span></label>
+                    <input
+                      value={form.ezidebitCustomerId}
+                      onChange={e => sf('ezidebitCustomerId', e.target.value)}
+                      placeholder="e.g. A1B2C3D4-xxxx-xxxx-xxxx (from Ezidebit portal)"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">If the tenant has already registered, paste their Ezidebit Customer ID here. Otherwise leave blank — it can be added later from the Customers page.</p>
+                  </div>
+
+                  {/* Settings nudge if no digital key */}
+                  {!settings.ezidebitDigitalKey && (
+                    <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                      <AlertCircle size={13} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                      <span>
+                        Configure your <strong>Ezidebit Digital Key</strong> in{' '}
+                        <Link href="/electricity/settings" className="font-semibold underline">Settings</Link>
+                        {' '}to include an automated registration link in the email.
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -729,13 +824,23 @@ export default function OnboardPage() {
                   </div>
                   <p className="text-xs text-slate-400 mt-1">Move-in: {form.moveInDate}</p>
                 </div>
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className={`p-4 rounded-xl border ${form.paymentMethod === 'ezidebit' ? 'bg-violet-50 border-violet-200' : 'bg-slate-50 border-slate-200'}`}>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Payment</p>
                   <p className="font-semibold text-slate-900">
-                    {form.paymentMethod === 'direct_debit' ? 'Direct Debit (DDR)' : form.paymentMethod === 'bpay' ? 'BPAY' : 'EFT Transfer'}
+                    {form.paymentMethod === 'direct_debit' ? 'Direct Debit (DDR)'
+                      : form.paymentMethod === 'ezidebit' ? 'Ezidebit DDR'
+                      : form.paymentMethod === 'bpay' ? 'BPAY'
+                      : 'EFT Transfer'}
                   </p>
                   {form.paymentMethod === 'direct_debit' && (
                     <p className="text-sm text-slate-500 mt-0.5">{form.accountName} · {form.bankName} · BSB {form.bsb} · {form.accountNumber}</p>
+                  )}
+                  {form.paymentMethod === 'ezidebit' && (
+                    <div className="mt-1 space-y-0.5">
+                      <p className="text-xs text-violet-700 flex items-center gap-1"><Shield size={11} />Bank details held securely by Ezidebit — not stored here</p>
+                      {form.ezidebitCustomerId && <p className="text-xs text-slate-500 font-mono">ID: {form.ezidebitCustomerId}</p>}
+                      {form.sendEzidebitDDR && <p className="text-xs text-violet-600 flex items-center gap-1"><Send size={11} />DDR registration email will be sent to {form.email}</p>}
+                    </div>
                   )}
                 </div>
                 {form.openingReading && (
