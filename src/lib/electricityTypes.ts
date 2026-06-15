@@ -86,6 +86,36 @@ export interface ElectricityInvoice {
   notes?: string
 }
 
+export interface DebtorComm {
+  id: string
+  invoiceId: string
+  customerId: string
+  date: string
+  type: 'reminder_1' | 'reminder_2' | 'final_notice' | 'note' | 'call' | 'dispute_raised' | 'dispute_resolved' | 'plan_created' | 'payment_received' | 'sent_to_recovery'
+  notes?: string
+}
+
+export type DebtorStatusType = 'active' | 'disputed' | 'payment_plan' | 'hardship' | 'recovery' | 'written_off'
+
+export interface DebtorStatus {
+  invoiceId: string
+  status: DebtorStatusType
+  updatedAt: string
+  notes?: string
+}
+
+export interface PaymentPlan {
+  id: string
+  invoiceId: string
+  customerId: string
+  totalAmount: number
+  instalmentAmount: number
+  frequency: 'weekly' | 'fortnightly' | 'monthly'
+  startDate: string
+  notes: string
+  status: 'active' | 'completed' | 'broken'
+}
+
 export interface ElectricitySettings {
   companyName: string
   abn: string

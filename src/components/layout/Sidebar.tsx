@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileBarChart2, CheckSquare,
   ShieldCheck, TrendingUp, Settings, ChevronRight,
-  Zap, Users, Upload, FileText, Download, UserPlus, PieChart,
+  Zap, Users, Upload, FileText, Download, UserPlus, PieChart, AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { COMPANY_NAME } from '@/lib/demoData'
@@ -24,6 +24,7 @@ const ELEC_NAV = [
   { href: '/electricity/onboard', label: 'Onboard Tenant', icon: UserPlus },
   { href: '/electricity/usage', label: 'Meter Readings', icon: Upload },
   { href: '/electricity/invoices', label: 'Invoices', icon: FileText },
+  { href: '/electricity/debtors', label: 'Debtor Mgmt', icon: AlertTriangle },
   { href: '/electricity/exports', label: 'Exports & ABA', icon: Download },
   { href: '/electricity/settings', label: 'Settings', icon: Settings },
 ]
