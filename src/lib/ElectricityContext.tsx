@@ -43,6 +43,7 @@ interface ElectricityStore {
   updateCustomer: (c: Customer) => void
   removeCustomer: (id: string) => void
   offboardCustomer: (customerId: string, moveOutDate: string, finalReading: number) => void
+  setVacateRequest: (customerId: string, date: string) => void
   // Data
   upsertReadings: (r: MeterReading[]) => void
   upsertInvoices: (i: ElectricityInvoice[]) => void
@@ -153,6 +154,15 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
 
   const removeCustomer = useCallback((id: string) => {
     setCustomers(prev => { const next = prev.filter(x => x.id !== id); save(KEYS.customers, next); return next })
+  }, [save])
+
+  const setVacateRequest = useCallback((customerId: string, date: string) => {
+    setCustomers(prev => {
+      if (prev.find(c => c.id === customerId)?.vacateRequestDate === date) return prev
+      const next = prev.map(c => c.id === customerId ? { ...c, vacateRequestDate: date } : c)
+      save(KEYS.customers, next)
+      return next
+    })
   }, [save])
 
   const offboardCustomer = useCallback((customerId: string, moveOutDate: string, finalReading: number) => {
@@ -309,7 +319,7 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{
       buildings, apartments, customers, readings, invoices, settings, isLoaded,
       addBuilding, updateBuilding, removeBuilding,
-      addCustomer, updateCustomer, removeCustomer, offboardCustomer,
+      addCustomer, updateCustomer, removeCustomer, offboardCustomer, setVacateRequest,
       upsertReadings, upsertInvoices, updateInvoice, updateSettings,
       nextInvoiceNumber, resetToDemo,
       debtorComms, debtorStatuses, paymentPlans,

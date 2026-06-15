@@ -30,6 +30,7 @@ export interface Customer {
   phone: string
   moveInDate: string
   moveOutDate?: string
+  vacateRequestDate?: string   // set when tenant notifies intent to vacate (before final bill is processed)
   bankName: string
   bsb: string
   accountNumber: string
