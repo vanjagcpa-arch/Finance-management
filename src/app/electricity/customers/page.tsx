@@ -157,7 +157,7 @@ export default function CustomersPage() {
           body: JSON.stringify({
             to: offboardCustomerObj.email,
             customerFirstName: offboardCustomerObj.firstName,
-            isDDR: offboardCustomerObj.paymentMethod === 'direct_debit',
+            isDDR: offboardCustomerObj.paymentMethod === 'direct_debit' || offboardCustomerObj.paymentMethod === 'ezidebit',
             customerBSB: offboardCustomerObj.bsb,
             customerAccount: offboardCustomerObj.accountNumber,
             customerAccountName: offboardCustomerObj.accountName,
@@ -332,8 +332,8 @@ export default function CustomersPage() {
                   </td>
                   {/* Banking (merged payment + bank + MYOB) */}
                   <td className="px-4 py-3">
-                    <span className={`badge-${c.paymentMethod === 'direct_debit' ? 'primary' : 'neutral'} text-xs`}>
-                      {c.paymentMethod === 'direct_debit' ? 'DDR' : c.paymentMethod === 'bpay' ? 'BPAY' : 'EFT'}
+                    <span className={`badge-${c.paymentMethod === 'direct_debit' || c.paymentMethod === 'ezidebit' ? 'primary' : 'neutral'} text-xs`}>
+                      {c.paymentMethod === 'direct_debit' ? 'DDR' : c.paymentMethod === 'bpay' ? 'BPAY' : c.paymentMethod === 'ezidebit' ? 'Ezidebit' : 'EFT'}
                     </span>
                     {c.bankName && (
                       <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
@@ -440,6 +440,7 @@ export default function CustomersPage() {
                       onChange={e => setForm(f => ({ ...f, paymentMethod: e.target.value as PaymentMethod }))}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                       <option value="direct_debit">Direct Debit (DDR)</option>
+                      <option value="ezidebit">Ezidebit</option>
                       <option value="bpay">BPAY</option>
                       <option value="eft">EFT Transfer</option>
                     </select>
@@ -486,7 +487,7 @@ export default function CustomersPage() {
                     <p className="text-sm text-amber-700">Unit {offboardApt.unitNumber} · {bldMap.get(offboardApt.buildingId)?.name}</p>
                   )}
                   <p className="text-xs text-amber-600 mt-0.5">
-                    {offboardCustomerObj.paymentMethod === 'direct_debit' ? 'Direct Debit (DDR)' : offboardCustomerObj.paymentMethod === 'bpay' ? 'BPAY' : 'EFT'}
+                    {offboardCustomerObj.paymentMethod === 'direct_debit' ? 'Direct Debit (DDR)' : offboardCustomerObj.paymentMethod === 'ezidebit' ? 'Ezidebit DDR' : offboardCustomerObj.paymentMethod === 'bpay' ? 'BPAY' : 'EFT'}
                     {latestReading && ` · Last reading: ${latestReading.currentReading.toLocaleString()} kWh (${latestReading.readingDate})`}
                   </p>
                 </div>
@@ -577,7 +578,7 @@ export default function CustomersPage() {
 
                   {sendFinalEmail && (
                     <div className={`p-3 rounded-lg border text-xs space-y-1 ${
-                      offboardCustomerObj.paymentMethod === 'direct_debit'
+                      offboardCustomerObj.paymentMethod === 'direct_debit' || offboardCustomerObj.paymentMethod === 'ezidebit'
                         ? 'bg-indigo-50 border-indigo-200 text-indigo-800'
                         : 'bg-slate-50 border-slate-200 text-slate-700'
                     }`}>
@@ -586,6 +587,12 @@ export default function CustomersPage() {
                           <p className="font-semibold">DDR notice will confirm:</p>
                           <p>· {formatAUD(proRata.total)} will be automatically debited on the due date</p>
                           <p>· Account: {offboardCustomerObj.bsb} / {offboardCustomerObj.accountNumber}</p>
+                          <p>· No action required from the tenant</p>
+                        </>
+                      ) : offboardCustomerObj.paymentMethod === 'ezidebit' ? (
+                        <>
+                          <p className="font-semibold">Ezidebit DDR notice will confirm:</p>
+                          <p>· {formatAUD(proRata.total)} will be automatically debited via Ezidebit on the due date</p>
                           <p>· No action required from the tenant</p>
                         </>
                       ) : (

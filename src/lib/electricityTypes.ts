@@ -19,7 +19,7 @@ export interface Apartment {
   meterNumber: string
 }
 
-export type PaymentMethod = 'direct_debit' | 'bpay' | 'eft'
+export type PaymentMethod = 'direct_debit' | 'bpay' | 'eft' | 'ezidebit'
 
 export interface Customer {
   id: string
@@ -37,6 +37,7 @@ export interface Customer {
   accountName: string
   myobCardId: string
   paymentMethod: PaymentMethod
+  ezidebitCustomerId?: string   // assigned by Ezidebit after tenant completes DDR registration
 }
 
 export interface MeterReading {
@@ -149,4 +150,6 @@ export interface ElectricitySettings {
   myobIncomeAccountCode: string  // DisplayID of the income account, e.g. "4-1000"
   myobLastSyncCustomers: string  // ISO timestamp
   myobLastSyncInvoices: string   // ISO timestamp
+  // Ezidebit integration
+  ezidebitDigitalKey: string     // public/digital key from Ezidebit portal — used to build hosted DDR form URLs
 }
