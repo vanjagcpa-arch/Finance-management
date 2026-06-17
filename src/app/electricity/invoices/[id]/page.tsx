@@ -22,6 +22,8 @@ export default function InvoiceDetailPage() {
   const [sending,      setSending]      = useState(false)
   const [downloading,  setDownloading]  = useState(false)
   const [showAdjModal, setShowAdjModal] = useState(false)
+  const [markPaidOpen, setMarkPaidOpen] = useState(false)
+  const [markPaidDate, setMarkPaidDate] = useState(() => new Date().toISOString().split('T')[0])
   const [adjForm, setAdjForm] = useState<AdjustmentForm>({
     type: 'credit',
     reason: '',
@@ -34,6 +36,11 @@ export default function InvoiceDetailPage() {
   const customer = useMemo(() => invoice ? customers.find(c => c.id === invoice.customerId) : undefined, [invoice, customers])
   const apt      = useMemo(() => invoice ? apartments.find(a => a.id === invoice.apartmentId) : undefined, [invoice, apartments])
   const building = useMemo(() => apt ? buildings.find(b => b.id === apt.buildingId) : undefined, [apt, buildings])
+
+  const relatedAdjustments = useMemo(() =>
+    invoices.filter(i => i.linkedInvoiceId === id && i.status !== 'cancelled'),
+    [invoices, id]
+  )
 
   const usageHistory = useMemo(() => {
     if (!invoice) return []
@@ -277,6 +284,46 @@ export default function InvoiceDetailPage() {
 
   return (
     <>
+      {/* Mark Paid Modal */}
+      {markPaidOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                <Check size={16} className="text-emerald-600" />Mark as Paid
+              </h2>
+              <button onClick={() => setMarkPaidOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-600">
+                Invoice <span className="font-mono font-medium">{invoice.invoiceNumber}</span>
+                <span className="ml-2 font-bold text-slate-900">{formatAUD(invoice.total)}</span>
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Date Paid</label>
+                <input type="date" value={markPaidDate}
+                  onChange={e => setMarkPaidDate(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setMarkPaidOpen(false)}
+                className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  updateInvoice({ ...invoice, status: 'paid', paidDate: markPaidDate })
+                  setMarkPaidOpen(false)
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700">
+                <Check size={14} />Confirm Paid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Adjustment Modal */}
       {showAdjModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -403,6 +450,13 @@ export default function InvoiceDetailPage() {
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
               <Check size={14} />Email Sent
             </span>
+          )}
+          {(invoice.status === 'sent' || invoice.status === 'overdue') && (
+            <button
+              onClick={() => { setMarkPaidDate(new Date().toISOString().split('T')[0]); setMarkPaidOpen(true) }}
+              className="flex items-center gap-2 px-4 py-2 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition-colors">
+              <Check size={14} />Mark Paid
+            </button>
           )}
           <button
             onClick={() => {
@@ -655,6 +709,43 @@ export default function InvoiceDetailPage() {
               <p className="text-xs text-slate-300 font-mono">{invoice.invoiceNumber}</p>
             </div>
           </div>
+
+          {/* Related Adjustments / Credit Notes */}
+          {relatedAdjustments.length > 0 && (
+            <div className="mt-4 bg-white shadow-md rounded-2xl overflow-hidden">
+              <div className="px-6 py-3 border-b border-slate-100 flex items-center gap-2">
+                <PlusCircle size={14} className="text-slate-400" />
+                <p className="text-sm font-semibold text-slate-700">
+                  {relatedAdjustments.length} Related {relatedAdjustments.length === 1 ? 'Adjustment' : 'Adjustments'}
+                </p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {relatedAdjustments.map(adj => (
+                  <button key={adj.id} onClick={() => router.push(`/electricity/invoices/${adj.id}`)}
+                    className="w-full px-6 py-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors text-left">
+                    <div className="flex items-center gap-3">
+                      <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        adj.adjustmentType === 'credit' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {adj.adjustmentType === 'credit' ? <Minus size={10} /> : <PlusCircle size={10} />}
+                        {adj.adjustmentType === 'credit' ? 'Credit Note' : 'Debit Adj'}
+                      </span>
+                      <span className="font-mono text-sm text-slate-700">{adj.invoiceNumber}</span>
+                      {adj.adjustmentReason && (
+                        <span className="text-xs text-slate-400">{adj.adjustmentReason}</span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-bold font-mono text-sm ${adj.total < 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {formatAUD(adj.total)}
+                      </p>
+                      <p className="text-xs text-slate-400">{adj.issueDate} · {adj.status}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

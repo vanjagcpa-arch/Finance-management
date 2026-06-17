@@ -17,6 +17,7 @@ interface ParsedRow {
   usage: number
   valid: boolean
   error?: string
+  anomaly?: { type: 'spike' | 'drop' | 'zero'; pctDiff: number }
 }
 
 interface EditForm {
@@ -95,6 +96,30 @@ export default function UsagePage() {
           const valid = !!apt && !isNaN(prev) && !isNaN(curr) && curr >= prev
           const error = !apt ? 'Apartment not found' : isNaN(curr) ? 'Missing current reading' : curr < prev ? 'Current < previous' : undefined
 
+          const usage = isNaN(curr) || isNaN(prev) ? 0 : Math.max(0, curr - prev)
+
+          // Detect anomalies vs 11-month history for this apartment
+          let anomaly: ParsedRow['anomaly'] = undefined
+          if (apt) {
+            const history = readings
+              .filter(r => r.apartmentId === apt.id)
+              .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))
+              .slice(0, 11)
+            if (history.length >= 2) {
+              const avgUsage = history.reduce((s, r) => s + r.usage, 0) / history.length
+              if (avgUsage > 0) {
+                const pctDiff = Math.round(((usage - avgUsage) / avgUsage) * 100)
+                if (usage === 0 && avgUsage >= 50) {
+                  anomaly = { type: 'zero', pctDiff: -100 }
+                } else if (pctDiff >= 50) {
+                  anomaly = { type: 'spike', pctDiff }
+                } else if (pctDiff <= -50) {
+                  anomaly = { type: 'drop', pctDiff }
+                }
+              }
+            }
+          }
+
           return {
             apartmentId: apt?.id ?? '',
             unitNumber: apt?.unitNumber ?? unitNum ?? '',
@@ -103,9 +128,10 @@ export default function UsagePage() {
             readingDate: date,
             previousReading: isNaN(prev) ? 0 : prev,
             currentReading: isNaN(curr) ? 0 : curr,
-            usage: isNaN(curr) || isNaN(prev) ? 0 : Math.max(0, curr - prev),
+            usage,
             valid,
             error,
+            anomaly,
           }
         })
         setPreview(rows)
@@ -182,6 +208,7 @@ export default function UsagePage() {
 
   const validCount = preview.filter(r => r.valid).length
   const errorCount = preview.filter(r => !r.valid).length
+  const anomalyCount = preview.filter(r => r.valid && r.anomaly).length
 
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>
 
@@ -259,6 +286,11 @@ export default function UsagePage() {
               <div className="flex items-center gap-3">
                 <span className="badge-success"><Check size={11} />{validCount} valid rows</span>
                 {errorCount > 0 && <span className="badge-danger"><AlertCircle size={11} />{errorCount} errors</span>}
+                {anomalyCount > 0 && (
+                  <span className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    ⚠ {anomalyCount} usage {anomalyCount === 1 ? 'anomaly' : 'anomalies'} detected
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
                 <button onClick={() => { setPreview([]); setImported(false) }} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700">
@@ -296,10 +328,25 @@ export default function UsagePage() {
                       <td className="px-3 py-2 text-right font-mono">{row.previousReading.toLocaleString()}</td>
                       <td className="px-3 py-2 text-right font-mono">{row.currentReading.toLocaleString()}</td>
                       <td className="px-3 py-2 text-right font-mono font-medium">{row.usage.toLocaleString()}</td>
-                      <td className="px-3 py-2">
-                        {row.valid
-                          ? <span className="badge-success"><Check size={10} />OK</span>
-                          : <span className="badge-danger"><AlertCircle size={10} />{row.error}</span>}
+                      <td className="px-3 py-2 min-w-[130px]">
+                        {row.valid ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="badge-success"><Check size={10} />OK</span>
+                            {row.anomaly && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full w-fit ${
+                                row.anomaly.type === 'spike' ? 'bg-amber-100 text-amber-700' :
+                                row.anomaly.type === 'drop'  ? 'bg-sky-100 text-sky-700' :
+                                                               'bg-red-100 text-red-700'
+                              }`}>
+                                {row.anomaly.type === 'spike' ? `▲ +${row.anomaly.pctDiff}% spike` :
+                                 row.anomaly.type === 'drop'  ? `▼ ${row.anomaly.pctDiff}% drop` :
+                                 '⚠ ZERO usage'}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="badge-danger"><AlertCircle size={10} />{row.error}</span>
+                        )}
                       </td>
                     </tr>
                   ))}
