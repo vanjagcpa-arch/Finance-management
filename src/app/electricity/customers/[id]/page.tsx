@@ -4,26 +4,40 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft, Download, FileText, Building2, Mail, Phone, CreditCard,
-  TrendingDown, TrendingUp, AlertCircle, CheckCircle, Clock, Send,
-  ExternalLink, Calendar,
+  AlertCircle, CheckCircle, Send,
+  ExternalLink, Calendar, Plus, X, RefreshCw,
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import {
-  formatAUD, formatDate, formatShortDate,
+  formatAUD, formatShortDate,
   getCustomerBalance, buildCustomerLedger, downloadFile,
 } from '@/lib/electricityUtils'
+import type { PaymentPlan } from '@/lib/electricityTypes'
 
 const today = new Date().toISOString().split('T')[0]
+
+interface MarkPaidModal { invId: string; invoiceNumber: string; amount: number; date: string }
 
 export default function CustomerLedgerPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { customers, invoices, apartments, buildings, settings, updateInvoice, isLoaded } = useElectricity()
+  const { customers, invoices, apartments, buildings, settings, updateInvoice, paymentPlans, upsertPaymentPlan, isLoaded } = useElectricity()
 
   const [downloading, setDownloading] = useState(false)
   const [sendingStatement, setSendingStatement] = useState(false)
   const [statementSent, setStatementSent] = useState(false)
   const [toast, setToast] = useState('')
+  const [markPaidModal, setMarkPaidModal] = useState<MarkPaidModal | null>(null)
+
+  // Payment plan form state
+  const [planFormOpen, setPlanFormOpen] = useState(false)
+  const [planForm, setPlanForm] = useState({
+    totalAmount: '',
+    instalmentAmount: '',
+    frequency: 'monthly' as PaymentPlan['frequency'],
+    startDate: today,
+    notes: '',
+  })
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3500) }
 
@@ -114,11 +128,56 @@ export default function CustomerLedgerPage() {
     setSendingStatement(false)
   }
 
-  function handleMarkPaid(invId: string, paidDate = today) {
+  function openMarkPaid(invId: string) {
     const inv = invoices.find(i => i.id === invId)
     if (!inv) return
-    updateInvoice({ ...inv, status: 'paid', paidDate, paidAmount: inv.total })
-    showToast(`Invoice ${inv.invoiceNumber} marked as paid`)
+    setMarkPaidModal({ invId, invoiceNumber: inv.invoiceNumber, amount: inv.total, date: today })
+  }
+
+  function confirmMarkPaid() {
+    if (!markPaidModal) return
+    const inv = invoices.find(i => i.id === markPaidModal.invId)
+    if (!inv) return
+    updateInvoice({ ...inv, status: 'paid', paidDate: markPaidModal.date, paidAmount: inv.total })
+    showToast(`${inv.invoiceNumber} marked as paid on ${markPaidModal.date}`)
+    setMarkPaidModal(null)
+  }
+
+  const custPaymentPlans = useMemo(
+    () => paymentPlans.filter(p => p.customerId === id).sort((a, b) => b.startDate.localeCompare(a.startDate)),
+    [paymentPlans, id],
+  )
+
+  function openNewPlan() {
+    setPlanForm({ totalAmount: String(Math.max(balance.balance, 0).toFixed(2)), instalmentAmount: '', frequency: 'monthly', startDate: today, notes: '' })
+    setPlanFormOpen(true)
+  }
+
+  function savePlan() {
+    const total = parseFloat(planForm.totalAmount)
+    const instalment = parseFloat(planForm.instalmentAmount)
+    if (!total || !instalment || !planForm.startDate) return
+    const plan: PaymentPlan = {
+      id: `plan-${id}-${Date.now()}`,
+      invoiceId: '',
+      customerId: id,
+      totalAmount: total,
+      instalmentAmount: instalment,
+      frequency: planForm.frequency,
+      startDate: planForm.startDate,
+      notes: planForm.notes,
+      status: 'active',
+    }
+    upsertPaymentPlan(plan)
+    setPlanFormOpen(false)
+    showToast('Payment plan created')
+  }
+
+  function updatePlanStatus(planId: string, status: PaymentPlan['status']) {
+    const plan = paymentPlans.find(p => p.id === planId)
+    if (!plan) return
+    upsertPaymentPlan({ ...plan, status })
+    showToast(`Plan marked as ${status}`)
   }
 
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center text-slate-400">Loading…</div>
@@ -419,7 +478,7 @@ export default function CustomerLedgerPage() {
                   </td>
                   <td className="px-3 py-2.5">
                     {(isSent || isOverdue) && (
-                      <button onClick={() => handleMarkPaid(inv.id)}
+                      <button onClick={() => openMarkPaid(inv.id)}
                         className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors whitespace-nowrap">
                         <CheckCircle size={11} />Mark Paid
                       </button>
@@ -431,6 +490,194 @@ export default function CustomerLedgerPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Payment Plans ── */}
+      <div className="card overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-800 text-sm">Payment Plans</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Instalment arrangements for outstanding balances</p>
+          </div>
+          {hasOutstanding && (
+            <button onClick={openNewPlan}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors">
+              <Plus size={12} />New Plan
+            </button>
+          )}
+        </div>
+        {custPaymentPlans.length === 0 ? (
+          <div className="px-4 py-8 text-center text-slate-400 text-sm">
+            {hasOutstanding ? 'No payment plan active — click "New Plan" to set one up' : 'No payment plans on record'}
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {custPaymentPlans.map(plan => {
+              const instalmentCount = Math.ceil(plan.totalAmount / plan.instalmentAmount)
+              const nextDue = (() => {
+                const d = new Date(plan.startDate + 'T00:00:00')
+                while (d.toISOString().split('T')[0] <= today) {
+                  if (plan.frequency === 'weekly') d.setDate(d.getDate() + 7)
+                  else if (plan.frequency === 'fortnightly') d.setDate(d.getDate() + 14)
+                  else d.setMonth(d.getMonth() + 1)
+                }
+                return d.toISOString().split('T')[0]
+              })()
+              return (
+                <div key={plan.id} className="px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          plan.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                          plan.status === 'completed' ? 'bg-slate-100 text-slate-500' :
+                          'bg-red-100 text-red-700'
+                        }`}>{plan.status}</span>
+                        <span className="text-sm font-semibold text-slate-800">{formatAUD(plan.instalmentAmount)}</span>
+                        <span className="text-xs text-slate-500">/ {plan.frequency}</span>
+                        <span className="text-xs text-slate-400">·</span>
+                        <span className="text-xs text-slate-500">{instalmentCount} instalments · total {formatAUD(plan.totalAmount)}</span>
+                      </div>
+                      <div className="flex items-center gap-4 mt-1.5 flex-wrap">
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
+                          <Calendar size={10} />Starts {formatShortDate(plan.startDate)}
+                        </span>
+                        {plan.status === 'active' && (
+                          <span className="text-xs text-indigo-600 font-medium flex items-center gap-1">
+                            Next: {formatShortDate(nextDue)}
+                          </span>
+                        )}
+                        {plan.notes && <span className="text-xs text-slate-400 italic truncate max-w-xs">{plan.notes}</span>}
+                      </div>
+                    </div>
+                    {plan.status === 'active' && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button onClick={() => updatePlanStatus(plan.id, 'completed')}
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors">
+                          <CheckCircle size={10} />Completed
+                        </button>
+                        <button onClick={() => updatePlanStatus(plan.id, 'broken')}
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition-colors">
+                          <X size={10} />Broken
+                        </button>
+                      </div>
+                    )}
+                    {plan.status !== 'active' && (
+                      <button onClick={() => updatePlanStatus(plan.id, 'active')}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded transition-colors flex-shrink-0">
+                        <RefreshCw size={10} />Reactivate
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Mark Paid Modal ── */}
+      {markPaidModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                <CheckCircle size={16} className="text-emerald-600" />Mark Invoice Paid
+              </h3>
+              <button onClick={() => setMarkPaidModal(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100"><X size={14} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-slate-50 rounded-xl px-4 py-3">
+                <p className="text-xs text-slate-400 mb-0.5">Invoice</p>
+                <p className="font-mono font-semibold text-slate-800">{markPaidModal.invoiceNumber}</p>
+                <p className="text-lg font-bold text-indigo-700 mt-1">{formatAUD(markPaidModal.amount)}</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Payment / Receipt Date</label>
+                <input type="date" value={markPaidModal.date}
+                  onChange={e => setMarkPaidModal(m => m ? { ...m, date: e.target.value } : m)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <p className="text-xs text-slate-400 mt-1">This date will appear in MYOB receipts export and the customer ledger.</p>
+              </div>
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+              <button onClick={() => setMarkPaidModal(null)}
+                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-white">Cancel</button>
+              <button onClick={confirmMarkPaid} disabled={!markPaidModal.date}
+                className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 disabled:opacity-40 flex items-center justify-center gap-2">
+                <CheckCircle size={14} />Confirm Paid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── New Payment Plan Modal ── */}
+      {planFormOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                <Calendar size={16} className="text-indigo-600" />New Payment Plan
+              </h3>
+              <button onClick={() => setPlanFormOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100"><X size={14} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Total Amount Owed ($)</label>
+                  <input type="number" step="0.01" value={planForm.totalAmount}
+                    onChange={e => setPlanForm(f => ({ ...f, totalAmount: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Instalment Amount ($)</label>
+                  <input type="number" step="0.01" value={planForm.instalmentAmount}
+                    onChange={e => setPlanForm(f => ({ ...f, instalmentAmount: e.target.value }))}
+                    placeholder="e.g. 150.00"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Frequency</label>
+                  <select value={planForm.frequency} onChange={e => setPlanForm(f => ({ ...f, frequency: e.target.value as PaymentPlan['frequency'] }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+                    <option value="weekly">Weekly</option>
+                    <option value="fortnightly">Fortnightly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Start Date</label>
+                  <input type="date" value={planForm.startDate}
+                    onChange={e => setPlanForm(f => ({ ...f, startDate: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              {planForm.totalAmount && planForm.instalmentAmount && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 text-xs text-indigo-700">
+                  {Math.ceil(parseFloat(planForm.totalAmount) / parseFloat(planForm.instalmentAmount))} instalments of {formatAUD(parseFloat(planForm.instalmentAmount))} {planForm.frequency}
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+                <input type="text" value={planForm.notes} onChange={e => setPlanForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="e.g. Hardship arrangement agreed on phone"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+              <button onClick={() => setPlanFormOpen(false)}
+                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-white">Cancel</button>
+              <button onClick={savePlan}
+                disabled={!planForm.totalAmount || !planForm.instalmentAmount || !planForm.startDate}
+                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-40">
+                Create Plan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
