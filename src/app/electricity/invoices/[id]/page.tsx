@@ -53,6 +53,56 @@ export default function InvoiceDetailPage() {
     ).toBlob()
   }
 
+  const isDDR = customer ? (customer.paymentMethod === 'direct_debit' || customer.paymentMethod === 'ezidebit') : false
+
+  function buildPortalData() {
+    if (!invoice || !customer || !apt || !building) return null
+    return {
+      customer: {
+        customerId: customer.id,
+        firstName: customer.firstName, lastName: customer.lastName,
+        email: customer.email, phone: customer.phone,
+        paymentMethod: customer.paymentMethod,
+        bsb: customer.bsb, accountNumber: customer.accountNumber, accountName: customer.accountName,
+      },
+      invoice: {
+        invoiceNumber: invoice.invoiceNumber,
+        period: monthName(invoice.month, invoice.year),
+        issueDate: invoice.issueDate, dueDate: invoice.dueDate,
+        total: invoice.total, usage: invoice.usage,
+        usageCharge: invoice.usageCharge, supplyCharge: invoice.supplyCharge,
+        subtotal: invoice.subtotal, gst: invoice.gst,
+        ratePerKwh: invoice.ratePerKwh, daysInPeriod: invoice.daysInPeriod,
+        gstRate: settings.tariff.gstRate,
+        status: invoice.status, isFinalBill: invoice.isFinalBill,
+        previousReading: invoice.previousReading, currentReading: invoice.currentReading,
+        billingPeriodStart: invoice.billingPeriodStart, billingPeriodEnd: invoice.billingPeriodEnd,
+        month: invoice.month, year: invoice.year,
+      },
+      company: {
+        name: settings.companyName, email: settings.email, phone: settings.phone, abn: settings.abn,
+        bpayBillerCode: settings.bpayBillerCode,
+        bankBSB: settings.bsb, bankAccount: settings.accountNumber,
+        bankAccountName: settings.accountName, bankName: settings.bankName,
+        fromEmail: settings.senderEmail,
+        address: settings.address, suburb: settings.suburb, state: settings.state, postcode: settings.postcode,
+        website: settings.website,
+      },
+      property: {
+        unitNumber: apt.unitNumber, floor: apt.floor, meterNumber: apt.meterNumber,
+        buildingName: building.name, buildingAddress: building.address,
+        suburb: building.suburb, state: building.state, postcode: building.postcode,
+        lowUsageThreshold: building.lowUsageThreshold,
+        highUsageThreshold: building.highUsageThreshold,
+      },
+      usageHistory: usageHistory.map(h => ({
+        label: h.label, usage: h.usage,
+        month: h.month, year: h.year,
+        isCurrent: h.month === invoice.month && h.year === invoice.year,
+      })),
+    }
+  }
+
   async function handleDownloadPDF() {
     if (!invoice || !customer || !apt || !building) return
     setDownloading(true)
@@ -67,56 +117,26 @@ export default function InvoiceDetailPage() {
   }
 
   async function handleSend() {
-    if (!invoice || !customer) return
+    if (!invoice || !customer || !apt || !building) return
     setSending(true)
     try {
       const blob = await generatePDFBlob()
       const arrayBuf = await blob.arrayBuffer()
       const pdfBase64 = Buffer.from(arrayBuf).toString('base64')
 
-      const isDDR = customer.paymentMethod === 'direct_debit'
-
-      // Build portal URL with encoded invoice data
-      const portalData = {
-        customer: {
-          customerId: customer.id,
-          firstName: customer.firstName, lastName: customer.lastName,
-          email: customer.email, phone: customer.phone,
-          paymentMethod: customer.paymentMethod,
-          bsb: customer.bsb, accountNumber: customer.accountNumber, accountName: customer.accountName,
-        },
-        invoice: {
-          invoiceNumber: invoice.invoiceNumber,
-          period: monthName(invoice.month, invoice.year),
-          issueDate: invoice.issueDate, dueDate: invoice.dueDate,
-          total: invoice.total, usage: invoice.usage,
-          usageCharge: invoice.usageCharge, supplyCharge: invoice.supplyCharge,
-          subtotal: invoice.subtotal, gst: invoice.gst,
-          ratePerKwh: invoice.ratePerKwh, daysInPeriod: invoice.daysInPeriod,
-          gstRate: settings.tariff.gstRate, status: invoice.status,
-          isFinalBill: invoice.isFinalBill,
-          previousReading: invoice.previousReading, currentReading: invoice.currentReading,
-          billingPeriodStart: invoice.billingPeriodStart, billingPeriodEnd: invoice.billingPeriodEnd,
-        },
-        company: {
-          name: settings.companyName, email: settings.email, phone: settings.phone, abn: settings.abn,
-          bpayBillerCode: settings.bpayBillerCode,
-          bankBSB: settings.bsb, bankAccount: settings.accountNumber,
-          bankAccountName: settings.accountName, bankName: settings.bankName,
-          fromEmail: settings.senderEmail,
-        },
-        property: {
-          unitNumber: apt!.unitNumber, floor: apt!.floor, meterNumber: apt!.meterNumber,
-          buildingName: building!.name, buildingAddress: building!.address,
-          suburb: building!.suburb, state: building!.state, postcode: building!.postcode,
-        },
-        usageHistory: usageHistory.map(h => ({
-          label: h.label,
-          usage: h.usage,
-          isCurrent: h.month === invoice.month && h.year === invoice.year,
-        })),
-      }
+      const portalData = buildPortalData()!
       const portalUrl = `${window.location.origin}/portal?d=${btoa(JSON.stringify(portalData))}`
+
+      const outstandingInvoices = invoices
+        .filter(inv => inv.customerId === customer.id && (inv.status === 'sent' || inv.status === 'overdue') && inv.id !== invoice.id)
+        .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))
+        .map(inv => ({
+          invoiceNumber: inv.invoiceNumber,
+          period: monthName(inv.month, inv.year),
+          dueDate: inv.dueDate,
+          total: inv.total,
+          status: inv.status as 'sent' | 'overdue',
+        }))
 
       const res = await fetch('/api/send-invoice', {
         method: 'POST',
@@ -156,6 +176,7 @@ export default function InvoiceDetailPage() {
           pdfBase64,
           pdfFilename: `${invoice.invoiceNumber}.pdf`,
           portalUrl,
+          outstandingInvoices,
         }),
       })
       const json = await res.json()
@@ -221,15 +242,9 @@ export default function InvoiceDetailPage() {
           )}
           <button
             onClick={() => {
-              if (!invoice || !customer || !apt || !building) return
-              const portalData = {
-                customer: { customerId: customer!.id, firstName: customer!.firstName, lastName: customer!.lastName, email: customer!.email, phone: customer!.phone, paymentMethod: customer!.paymentMethod, bsb: customer!.bsb, accountNumber: customer!.accountNumber, accountName: customer!.accountName },
-                invoice: { invoiceNumber: invoice!.invoiceNumber, period: monthName(invoice!.month, invoice!.year), issueDate: invoice!.issueDate, dueDate: invoice!.dueDate, total: invoice!.total, usage: invoice!.usage, usageCharge: invoice!.usageCharge, supplyCharge: invoice!.supplyCharge, subtotal: invoice!.subtotal, gst: invoice!.gst, ratePerKwh: invoice!.ratePerKwh, daysInPeriod: invoice!.daysInPeriod, gstRate: settings.tariff.gstRate, status: invoice!.status, isFinalBill: invoice!.isFinalBill, previousReading: invoice!.previousReading, currentReading: invoice!.currentReading, billingPeriodStart: invoice!.billingPeriodStart, billingPeriodEnd: invoice!.billingPeriodEnd },
-                company: { name: settings.companyName, email: settings.email, phone: settings.phone, abn: settings.abn, bpayBillerCode: settings.bpayBillerCode, bankBSB: settings.bsb, bankAccount: settings.accountNumber, bankAccountName: settings.accountName, bankName: settings.bankName, fromEmail: settings.senderEmail },
-                property: { unitNumber: apt!.unitNumber, floor: apt!.floor, meterNumber: apt!.meterNumber, buildingName: building!.name, buildingAddress: building!.address, suburb: building!.suburb, state: building!.state, postcode: building!.postcode },
-                usageHistory: usageHistory.map(h => ({ label: h.label, usage: h.usage, isCurrent: h.month === invoice!.month && h.year === invoice!.year })),
-              }
-              window.open(`/portal?d=${btoa(JSON.stringify(portalData))}`, '_blank')
+              const pd = buildPortalData()
+              if (!pd) return
+              window.open(`/portal?d=${btoa(JSON.stringify(pd))}`, '_blank')
             }}
             className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
             <ExternalLink size={14} />Tenant View

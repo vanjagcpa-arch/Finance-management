@@ -44,6 +44,14 @@ export interface SendInvoicePayload {
   pdfFilename: string
   // Tenant portal
   portalUrl?: string
+  // Outstanding balance
+  outstandingInvoices?: Array<{
+    invoiceNumber: string
+    period: string
+    dueDate: string
+    total: number
+    status: 'sent' | 'overdue'
+  }>
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -56,6 +64,27 @@ function buildEmail(p: SendInvoicePayload): string {
   const rateDisp = (p.ratePerKwh * 100).toFixed(2)
   const gstPct   = (p.gstRate * 100).toFixed(0)
   const bpayRef  = p.invoiceNumber.replace(/-/g, '')
+
+  const outstandingBlock = (p.outstandingInvoices && p.outstandingInvoices.length > 0) ? `
+  <p style="margin:28px 0 10px;color:#94a3b8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Account Statement — Other Outstanding Invoices</p>
+  <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:8px;">
+    <tr style="background-color:#f8fafc;">
+      <td style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;">Invoice</td>
+      <td style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;">Period</td>
+      <td style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;">Due</td>
+      <td style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;text-align:right;">Amount</td>
+      <td style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;text-align:right;">Status</td>
+    </tr>
+    ${p.outstandingInvoices.map(inv => `
+    <tr style="border-top:1px solid #f1f5f9;">
+      <td style="padding:9px 14px;font-family:Courier New,monospace;font-size:11px;color:#334155;">${inv.invoiceNumber}</td>
+      <td style="padding:9px 14px;font-size:12px;color:#64748b;">${inv.period}</td>
+      <td style="padding:9px 14px;font-size:12px;color:#64748b;">${date(inv.dueDate)}</td>
+      <td style="padding:9px 14px;font-size:13px;font-weight:600;color:#dc2626;text-align:right;">${aud(inv.total)}</td>
+      <td style="padding:9px 14px;font-size:10px;font-weight:700;color:${inv.status === 'overdue' ? '#dc2626' : '#64748b'};text-align:right;">${inv.status.toUpperCase()}</td>
+    </tr>`).join('')}
+  </table>
+  <p style="margin:0 0 0;font-size:11px;color:#94a3b8;">Please contact us if you have any questions about your outstanding balance.</p>` : ''
 
   const ddrBlock = p.isDDR ? `
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#eef2ff;border:1px solid #e0e7ff;border-radius:10px;margin:24px 0 0;">
@@ -191,6 +220,9 @@ function buildEmail(p: SendInvoicePayload): string {
 
             <!-- Payment info -->
             ${paymentBlock}
+
+            <!-- Outstanding balance -->
+            ${outstandingBlock}
 
             <!-- Portal link -->
             ${p.portalUrl ? `
