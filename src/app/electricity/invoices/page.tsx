@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { FileText, Search, Send, RefreshCw, Check, AlertTriangle, Download } from 'lucide-react'
+import { FileText, Search, Send, RefreshCw, Check, AlertTriangle, Download, PlusCircle, Minus } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { formatAUD, monthName } from '@/lib/electricityUtils'
 import type { ElectricityInvoice } from '@/lib/electricityTypes'
@@ -311,6 +311,18 @@ export default function InvoicesPage() {
                     <Link href={`/electricity/invoices/${inv.id}`} className="text-indigo-600 hover:underline font-mono text-xs font-medium">
                       {inv.invoiceNumber}
                     </Link>
+                    {inv.isAdjustment && (
+                      <span className={`ml-1.5 inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full
+                        ${inv.adjustmentType === 'credit' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {inv.adjustmentType === 'credit' ? <Minus size={9} /> : <PlusCircle size={9} />}
+                        {inv.adjustmentType === 'credit' ? 'CR' : 'ADJ'}
+                      </span>
+                    )}
+                    {inv.isFinalBill && (
+                      <span className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">
+                        FINAL
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-slate-800">{cust ? `${cust.firstName} ${cust.lastName}` : '—'}</p>
@@ -320,8 +332,8 @@ export default function InvoicesPage() {
                     <p className="text-slate-700">{bld?.name}</p>
                     <p className="text-xs text-slate-400">Unit {apt?.unitNumber}</p>
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-slate-600">{inv.usage.toLocaleString()} kWh</td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-slate-900">{formatAUD(inv.total)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-slate-600">{inv.isAdjustment ? '—' : `${inv.usage.toLocaleString()} kWh`}</td>
+                  <td className={`px-4 py-3 text-right font-mono font-semibold ${inv.total < 0 ? 'text-emerald-700' : 'text-slate-900'}`}>{formatAUD(inv.total)}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs">{inv.dueDate}</td>
                   <td className="px-4 py-3 text-center">
                     <select

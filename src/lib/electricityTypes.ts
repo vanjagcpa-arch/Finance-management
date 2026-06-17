@@ -86,6 +86,10 @@ export interface ElectricityInvoice {
   total: number
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
   isFinalBill?: boolean
+  isAdjustment?: boolean
+  adjustmentType?: 'credit' | 'debit_adj'
+  adjustmentReason?: string
+  linkedInvoiceId?: string
   paidDate?: string
   paidAmount?: number
   paymentReference?: string

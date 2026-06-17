@@ -1,19 +1,34 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Download, Send, Check, Zap, Building2, User, Calendar, CreditCard, AlertTriangle, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Download, Send, Check, Zap, Building2, User, Calendar, AlertTriangle, ExternalLink, PlusCircle, X, Minus } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell, ResponsiveContainer } from 'recharts'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { formatAUD, formatDate, monthName, getUsageHistory, usageColor, downloadFile } from '@/lib/electricityUtils'
 import type { ElectricityInvoice } from '@/lib/electricityTypes'
 
+interface AdjustmentForm {
+  type: 'credit' | 'debit_adj'
+  reason: string
+  amountExclGST: string
+  date: string
+}
+
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { invoices, customers, buildings, apartments, settings, updateInvoice, readings, isLoaded } = useElectricity()
+  const { invoices, customers, buildings, apartments, settings, updateInvoice, upsertInvoices, nextInvoiceNumber, readings, isLoaded } = useElectricity()
   const [emailSent,    setEmailSent]    = useState(false)
   const [sending,      setSending]      = useState(false)
   const [downloading,  setDownloading]  = useState(false)
+  const [showAdjModal, setShowAdjModal] = useState(false)
+  const [adjForm, setAdjForm] = useState<AdjustmentForm>({
+    type: 'credit',
+    reason: '',
+    amountExclGST: '',
+    date: new Date().toISOString().split('T')[0],
+  })
+  const [adjSaved, setAdjSaved] = useState(false)
 
   const invoice  = useMemo(() => invoices.find(i => i.id === id), [invoices, id])
   const customer = useMemo(() => invoice ? customers.find(c => c.id === invoice.customerId) : undefined, [invoice, customers])
@@ -191,6 +206,56 @@ export default function InvoiceDetailPage() {
     }
   }
 
+  function handleCreateAdjustment() {
+    if (!invoice || !customer || !apt) return
+    const amtExcl = parseFloat(adjForm.amountExclGST)
+    if (isNaN(amtExcl) || amtExcl <= 0 || !adjForm.reason) return
+
+    const sign = adjForm.type === 'credit' ? -1 : 1
+    const subtotal = Math.round(amtExcl * sign * 100) / 100
+    const gst = Math.round(subtotal * settings.tariff.gstRate * 100) / 100
+    const total = Math.round((subtotal + gst) * 100) / 100
+    const today = adjForm.date
+    const d = new Date(today)
+    const adjMonth = d.getMonth() + 1
+    const adjYear = d.getFullYear()
+    const prefix = adjForm.type === 'credit' ? 'CRED' : 'ADJ'
+    const invoiceNumber = `${prefix}-${nextInvoiceNumber(adjMonth, adjYear)}`
+
+    const adjInvoice: ElectricityInvoice = {
+      id: `adj-${invoice.id}-${Date.now()}`,
+      invoiceNumber,
+      customerId: customer.id,
+      apartmentId: apt.id,
+      buildingId: invoice.buildingId,
+      month: adjMonth,
+      year: adjYear,
+      issueDate: today,
+      dueDate: today,
+      billingPeriodStart: invoice.billingPeriodStart,
+      billingPeriodEnd: invoice.billingPeriodEnd,
+      daysInPeriod: invoice.daysInPeriod,
+      previousReading: invoice.previousReading,
+      currentReading: invoice.currentReading,
+      usage: 0,
+      ratePerKwh: invoice.ratePerKwh,
+      usageCharge: 0,
+      supplyCharge: 0,
+      subtotal,
+      gst,
+      total,
+      status: 'draft',
+      isAdjustment: true,
+      adjustmentType: adjForm.type,
+      adjustmentReason: adjForm.reason,
+      linkedInvoiceId: invoice.id,
+    }
+
+    upsertInvoices([adjInvoice])
+    setAdjSaved(true)
+    setTimeout(() => { setShowAdjModal(false); setAdjSaved(false) }, 1500)
+  }
+
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>
   if (!invoice || !customer || !apt || !building) return (
     <div className="flex-1 flex items-center justify-center">
@@ -205,8 +270,100 @@ export default function InvoiceDetailPage() {
   const low = building.lowUsageThreshold
   const high = building.highUsageThreshold
 
+  const adjAmtExcl = parseFloat(adjForm.amountExclGST)
+  const adjValid = !isNaN(adjAmtExcl) && adjAmtExcl > 0 && adjForm.reason.trim().length > 0
+  const adjGST = adjValid ? Math.round(adjAmtExcl * settings.tariff.gstRate * 100) / 100 : 0
+  const adjTotal = adjValid ? Math.round((adjAmtExcl + adjGST) * (adjForm.type === 'credit' ? -1 : 1) * 100) / 100 : 0
+
   return (
     <>
+      {/* Adjustment Modal */}
+      {showAdjModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                <PlusCircle size={16} className="text-indigo-600" />
+                Create Adjustment / Credit Note
+              </h2>
+              <button onClick={() => setShowAdjModal(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-500">Linked to invoice <span className="font-mono font-medium">{invoice.invoiceNumber}</span></p>
+
+              <div>
+                <label className="text-xs font-medium text-slate-700 block mb-1.5">Type</label>
+                <div className="flex gap-3">
+                  {(['credit', 'debit_adj'] as const).map(t => (
+                    <label key={t} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border cursor-pointer text-sm font-medium transition-colors
+                      ${adjForm.type === t ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                      <input type="radio" name="adjType" value={t} checked={adjForm.type === t}
+                        onChange={() => setAdjForm(f => ({ ...f, type: t }))} className="sr-only" />
+                      {t === 'credit' ? <><Minus size={14} className="text-emerald-600" />Credit Note</> : <><PlusCircle size={14} className="text-amber-600" />Debit Adjustment</>}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-700 block mb-1.5">Reason <span className="text-red-500">*</span></label>
+                <input type="text" value={adjForm.reason} placeholder="e.g. Meter reading correction, billing error, goodwill credit"
+                  onChange={e => setAdjForm(f => ({ ...f, reason: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-700 block mb-1.5">Amount (excl. GST) <span className="text-red-500">*</span></label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <input type="number" step="0.01" min="0" value={adjForm.amountExclGST} placeholder="0.00"
+                      onChange={e => setAdjForm(f => ({ ...f, amountExclGST: e.target.value }))}
+                      className="w-full pl-7 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-700 block mb-1.5">Date</label>
+                  <input type="date" value={adjForm.date} onChange={e => setAdjForm(f => ({ ...f, date: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+
+              {adjValid && (
+                <div className={`rounded-xl p-4 text-sm ${adjForm.type === 'credit' ? 'bg-emerald-50 border border-emerald-100' : 'bg-amber-50 border border-amber-100'}`}>
+                  <div className="flex justify-between text-slate-600 mb-1">
+                    <span>Subtotal (excl. GST)</span>
+                    <span className="font-mono">{formatAUD(adjAmtExcl * (adjForm.type === 'credit' ? -1 : 1))}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 mb-1">
+                    <span>GST ({(settings.tariff.gstRate * 100).toFixed(0)}%)</span>
+                    <span className="font-mono">{formatAUD(adjGST * (adjForm.type === 'credit' ? -1 : 1))}</span>
+                  </div>
+                  <div className={`flex justify-between font-bold text-base pt-2 border-t ${adjForm.type === 'credit' ? 'border-emerald-200 text-emerald-800' : 'border-amber-200 text-amber-800'}`}>
+                    <span>{adjForm.type === 'credit' ? 'Credit Total' : 'Adjustment Total'}</span>
+                    <span className="font-mono">{formatAUD(adjTotal)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setShowAdjModal(false)} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+              {adjSaved ? (
+                <span className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium">
+                  <Check size={14} />Created
+                </span>
+              ) : (
+                <button onClick={handleCreateAdjustment} disabled={!adjValid}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                  <PlusCircle size={14} />
+                  Create {adjForm.type === 'credit' ? 'Credit Note' : 'Adjustment'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="print:hidden sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
         <button onClick={() => router.back()} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800">
@@ -215,6 +372,13 @@ export default function InvoiceDetailPage() {
         <div className="flex items-center gap-2">
           {invoice.isFinalBill && (
             <span className="badge-danger flex items-center gap-1"><AlertTriangle size={11} />Final Bill</span>
+          )}
+          {invoice.isAdjustment && (
+            <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full
+              ${invoice.adjustmentType === 'credit' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+              {invoice.adjustmentType === 'credit' ? <Minus size={11} /> : <PlusCircle size={11} />}
+              {invoice.adjustmentType === 'credit' ? 'Credit Note' : 'Debit Adjustment'}
+            </span>
           )}
           <select value={invoice.status}
             onChange={e => updateInvoice({ ...invoice, status: e.target.value as ElectricityInvoice['status'] })}
@@ -249,6 +413,12 @@ export default function InvoiceDetailPage() {
             className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
             <ExternalLink size={14} />Tenant View
           </button>
+          {!invoice.isAdjustment && (
+            <button onClick={() => setShowAdjModal(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
+              <PlusCircle size={14} />Adjustment
+            </button>
+          )}
           <button onClick={handleDownloadPDF} disabled={downloading}
             className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-700 disabled:opacity-60 transition-colors">
             <Download size={14} className={downloading ? 'animate-spin' : ''} />
