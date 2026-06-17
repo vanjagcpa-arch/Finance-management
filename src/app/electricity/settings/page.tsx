@@ -1,11 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Settings, Building2, Zap, CreditCard, Save, Plus, Edit2, Trash2, X, Check, AlertCircle, Link2, RefreshCw, Users, FileText, ChevronRight, Loader2, Unlink, ExternalLink, Shield } from 'lucide-react'
+import { Settings, Building2, Zap, CreditCard, Save, Plus, Edit2, Trash2, X, Check, AlertCircle, Link2, RefreshCw, Users, FileText, ChevronRight, Loader2, Unlink, ExternalLink, Shield, Eye, EyeOff, KeyRound, UserCog } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { generateApartmentsForBuilding } from '@/lib/electricityData'
 import type { Building, ElectricitySettings } from '@/lib/electricityTypes'
+import { useAuth } from '@/lib/AuthContext'
+import type { AppUser, UserRole } from '@/lib/authTypes'
 
-type Tab = 'company' | 'buildings' | 'tariff' | 'banking' | 'myob' | 'ezidebit'
+type Tab = 'company' | 'buildings' | 'tariff' | 'banking' | 'myob' | 'ezidebit' | 'users'
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Settings }> = [
   { id: 'company',   label: 'Company & Invoice', icon: Settings },
@@ -14,6 +16,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Settings }> = [
   { id: 'banking',   label: 'Banking & ABA',      icon: CreditCard },
   { id: 'myob',      label: 'MYOB',               icon: Link2 },
   { id: 'ezidebit',  label: 'Ezidebit',           icon: Shield },
+  { id: 'users',     label: 'Users',              icon: Users },
 ]
 
 const EMPTY_BUILDING: Omit<Building, 'id'> = {
@@ -23,8 +26,32 @@ const EMPTY_BUILDING: Omit<Building, 'id'> = {
 
 interface MYOBFile { Id: string; Name: string; Uri: string }
 
+const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
+  { value: 'admin',    label: 'Admin',     desc: 'Full access including user management & settings' },
+  { value: 'billing',  label: 'Billing',   desc: 'Manage customers, readings, invoices and debtors' },
+  { value: 'readonly', label: 'Read Only', desc: 'View data only — no create, edit or delete' },
+]
+
+const ROLE_BADGE: Record<UserRole, string> = {
+  admin:    'bg-indigo-100 text-indigo-700',
+  billing:  'bg-emerald-100 text-emerald-700',
+  readonly: 'bg-slate-100 text-slate-600',
+}
+
+interface UserForm {
+  firstName: string; lastName: string; username: string
+  email: string; role: UserRole; active: boolean
+  password: string; confirmPassword: string
+}
+
+const EMPTY_USER_FORM: UserForm = {
+  firstName: '', lastName: '', username: '', email: '',
+  role: 'billing', active: true, password: '', confirmPassword: '',
+}
+
 export default function SettingsPage() {
   const { settings, buildings, customers, apartments, invoices, updateSettings, addBuilding, updateBuilding, removeBuilding, resetToDemo, isLoaded } = useElectricity()
+  const { users, session, addUser, updateUser, changePassword, removeUser } = useAuth()
   const [tab,   setTab]   = useState<Tab>('company')
   const [form,  setForm]  = useState<ElectricitySettings>(settings)
   const [saved, setSaved] = useState(false)
@@ -36,6 +63,20 @@ export default function SettingsPage() {
   const [deleteBld, setDeleteBld] = useState<string | null>(null)
   const [toast, setToast] = useState('')
   const [toastType, setToastType] = useState<'success' | 'error'>('success')
+
+  // User management state
+  const [userModal,   setUserModal]   = useState(false)
+  const [editUserId,  setEditUserId]  = useState<string | null>(null)
+  const [userForm,    setUserForm]    = useState<UserForm>(EMPTY_USER_FORM)
+  const [userError,   setUserError]   = useState('')
+  const [userSaving,  setUserSaving]  = useState(false)
+  const [showPw,      setShowPw]      = useState(false)
+  const [showCPw,     setShowCPw]     = useState(false)
+  const [pwModal,     setPwModal]     = useState<string | null>(null) // userId for change-pw modal
+  const [pwForm,      setPwForm]      = useState({ password: '', confirm: '' })
+  const [pwError,     setPwError]     = useState('')
+  const [pwSaving,    setPwSaving]    = useState(false)
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
 
   // MYOB states
   const [myobFiles,         setMyobFiles]         = useState<MYOBFile[]>([])
@@ -285,6 +326,72 @@ export default function SettingsPage() {
     } finally {
       setMyobSyncing(null)
     }
+  }
+
+  // --- User management handlers ---
+  function openAddUser() {
+    setEditUserId(null)
+    setUserForm(EMPTY_USER_FORM)
+    setUserError('')
+    setShowPw(false)
+    setShowCPw(false)
+    setUserModal(true)
+  }
+
+  function openEditUser(u: AppUser) {
+    setEditUserId(u.id)
+    setUserForm({ firstName: u.firstName, lastName: u.lastName, username: u.username, email: u.email, role: u.role, active: u.active, password: '', confirmPassword: '' })
+    setUserError('')
+    setUserModal(true)
+  }
+
+  async function handleSaveUser() {
+    setUserError('')
+    if (!userForm.firstName || !userForm.lastName || !userForm.username || !userForm.email) {
+      setUserError('All fields are required'); return
+    }
+    if (!editUserId && !userForm.password) { setUserError('Password is required'); return }
+    if (userForm.password && userForm.password !== userForm.confirmPassword) {
+      setUserError('Passwords do not match'); return
+    }
+    if (userForm.password && userForm.password.length < 6) {
+      setUserError('Password must be at least 6 characters'); return
+    }
+    setUserSaving(true)
+    if (editUserId) {
+      updateUser(editUserId, { firstName: userForm.firstName, lastName: userForm.lastName, email: userForm.email, role: userForm.role, active: userForm.active })
+      if (userForm.password) await changePassword(editUserId, userForm.password)
+      showToast('User updated', 'success')
+    } else {
+      const result = await addUser({ ...userForm })
+      if (!result.ok) { setUserError(result.error ?? 'Failed to create user'); setUserSaving(false); return }
+      showToast('User created', 'success')
+    }
+    setUserSaving(false)
+    setUserModal(false)
+  }
+
+  async function handleChangePw() {
+    setPwError('')
+    if (!pwForm.password) { setPwError('Enter a new password'); return }
+    if (pwForm.password.length < 6) { setPwError('Password must be at least 6 characters'); return }
+    if (pwForm.password !== pwForm.confirm) { setPwError('Passwords do not match'); return }
+    setPwSaving(true)
+    await changePassword(pwModal!, pwForm.password)
+    setPwSaving(false)
+    setPwModal(null)
+    setPwForm({ password: '', confirm: '' })
+    showToast('Password changed', 'success')
+  }
+
+  function handleDeleteUser(id: string) {
+    const adminCount = users.filter(u => u.role === 'admin' && u.active).length
+    const target = users.find(u => u.id === id)
+    if (target?.role === 'admin' && adminCount <= 1) { showToast('Cannot remove the last admin', 'error'); setDeleteUserId(null); return }
+    if (id === session?.userId) { showToast('Cannot delete your own account', 'error'); setDeleteUserId(null); return }
+    removeUser(id)
+    showToast('User removed', 'success')
+    setDeleteUserId(null)
   }
 
   function fmtDate(iso: string) {
@@ -778,6 +885,109 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* ── Users Tab ── */}
+      {tab === 'users' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500">{users.length} user{users.length !== 1 ? 's' : ''} configured</p>
+              <p className="text-xs text-slate-400 mt-0.5">Credentials are stored locally. Each user can sign in with their username and password.</p>
+            </div>
+            {session?.role === 'admin' && (
+              <button onClick={openAddUser}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+                <Plus size={14} />Add User
+              </button>
+            )}
+          </div>
+
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="table-header text-left px-5 py-3">User</th>
+                  <th className="table-header text-left px-5 py-3">Username</th>
+                  <th className="table-header text-left px-5 py-3">Role</th>
+                  <th className="table-header text-left px-5 py-3">Status</th>
+                  <th className="table-header text-left px-5 py-3">Last Login</th>
+                  {session?.role === 'admin' && <th className="px-5 py-3 w-32"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id} className={`data-row ${!u.active ? 'opacity-50' : ''}`}>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          {(u.firstName[0] ?? '') + (u.lastName[0] ?? '')}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-800">{u.firstName} {u.lastName}</p>
+                          <p className="text-xs text-slate-400">{u.email}</p>
+                        </div>
+                        {u.id === session?.userId && (
+                          <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">You</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3 font-mono text-slate-600 text-xs">{u.username}</td>
+                    <td className="px-5 py-3">
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ROLE_BADGE[u.role]}`}>
+                        {ROLE_OPTIONS.find(r => r.value === u.role)?.label ?? u.role}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {u.active
+                        ? <span className="flex items-center gap-1 text-xs text-emerald-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />Active</span>
+                        : <span className="flex items-center gap-1 text-xs text-slate-400"><span className="w-1.5 h-1.5 rounded-full bg-slate-300 inline-block" />Inactive</span>
+                      }
+                    </td>
+                    <td className="px-5 py-3 text-xs text-slate-400">
+                      {u.lastLogin ? fmtDate(u.lastLogin) : 'Never'}
+                    </td>
+                    {session?.role === 'admin' && (
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-1 justify-end">
+                          <button onClick={() => { setPwModal(u.id); setPwForm({ password: '', confirm: '' }); setPwError('') }}
+                            title="Change password"
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors">
+                            <KeyRound size={14} />
+                          </button>
+                          <button onClick={() => openEditUser(u)}
+                            title="Edit user"
+                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors">
+                            <UserCog size={14} />
+                          </button>
+                          {u.id !== session.userId && (
+                            <button onClick={() => setDeleteUserId(u.id)}
+                              title="Remove user"
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card p-5 bg-slate-50 border border-dashed border-slate-200">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Role Permissions</p>
+            <div className="grid grid-cols-3 gap-3">
+              {ROLE_OPTIONS.map(r => (
+                <div key={r.value} className="bg-white rounded-xl p-3 border border-slate-200">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ROLE_BADGE[r.value]}`}>{r.label}</span>
+                  <p className="text-xs text-slate-500 mt-2">{r.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Building Modal */}
       {bldModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -849,6 +1059,175 @@ export default function SettingsPage() {
             <div className="flex gap-3">
               <button onClick={() => setDeleteBld(null)} className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
               <button onClick={() => handleDeleteBuilding(deleteBld!)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit User Modal */}
+      {userModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Users size={16} className="text-indigo-600" />
+                {editUserId ? 'Edit User' : 'Add User'}
+              </h2>
+              <button onClick={() => setUserModal(false)} className="p-1.5 text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">First Name *</label>
+                  <input type="text" value={userForm.firstName} onChange={e => setUserForm(f => ({ ...f, firstName: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Last Name *</label>
+                  <input type="text" value={userForm.lastName} onChange={e => setUserForm(f => ({ ...f, lastName: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Username *</label>
+                  <input type="text" value={userForm.username} disabled={!!editUserId}
+                    onChange={e => setUserForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s/g,'') }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-400" />
+                  {editUserId && <p className="text-xs text-slate-400 mt-0.5">Username cannot be changed</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Email *</label>
+                  <input type="email" value={userForm.email} onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">Role *</label>
+                <div className="space-y-2">
+                  {ROLE_OPTIONS.map(r => (
+                    <label key={r.value} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors
+                      ${userForm.role === r.value ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
+                      <input type="radio" name="role" value={r.value} checked={userForm.role === r.value}
+                        onChange={() => setUserForm(f => ({ ...f, role: r.value }))} className="mt-0.5" />
+                      <div>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ROLE_BADGE[r.value]}`}>{r.label}</span>
+                        <p className="text-xs text-slate-500 mt-1">{r.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {!editUserId && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Password *</label>
+                    <div className="relative">
+                      <input type={showPw ? 'text' : 'password'} value={userForm.password}
+                        onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <button type="button" onClick={() => setShowPw(s => !s)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                        {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Confirm Password *</label>
+                    <div className="relative">
+                      <input type={showCPw ? 'text' : 'password'} value={userForm.confirmPassword}
+                        onChange={e => setUserForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      <button type="button" onClick={() => setShowCPw(s => !s)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                        {showCPw ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {editUserId && (
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                    <input type="checkbox" checked={userForm.active} onChange={e => setUserForm(f => ({ ...f, active: e.target.checked }))}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                    Account active
+                  </label>
+                  <span className="text-xs text-slate-400">Inactive users cannot sign in</span>
+                </div>
+              )}
+              {userError && (
+                <div className="bg-red-50 border border-red-100 rounded-lg px-4 py-2.5 text-sm text-red-700 flex items-center gap-2">
+                  <AlertCircle size={14} />{userError}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+              <button onClick={() => setUserModal(false)} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-white">Cancel</button>
+              <button onClick={handleSaveUser} disabled={userSaving}
+                className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                <Save size={14} />{userSaving ? 'Saving…' : editUserId ? 'Save Changes' : 'Create User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {pwModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                <KeyRound size={15} className="text-indigo-600" />
+                Change Password
+              </h2>
+              <button onClick={() => setPwModal(null)} className="p-1.5 text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-500">
+                Setting new password for <strong>{users.find(u => u.id === pwModal)?.username}</strong>
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">New Password</label>
+                <input type="password" value={pwForm.password} onChange={e => setPwForm(f => ({ ...f, password: e.target.value }))}
+                  placeholder="Min. 6 characters"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Confirm Password</label>
+                <input type="password" value={pwForm.confirm} onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              {pwError && (
+                <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-sm text-red-700 flex items-center gap-2">
+                  <AlertCircle size={13} />{pwError}
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+              <button onClick={() => setPwModal(null)} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+              <button onClick={handleChangePw} disabled={pwSaving}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                <Check size={14} />{pwSaving ? 'Saving…' : 'Update Password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User confirm */}
+      {deleteUserId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-slate-900 mb-2">Remove User?</h3>
+            <p className="text-sm text-slate-500 mb-1">
+              This will permanently remove <strong>{users.find(u => u.id === deleteUserId)?.firstName} {users.find(u => u.id === deleteUserId)?.lastName}</strong>.
+            </p>
+            <p className="text-sm text-slate-400 mb-5">They will no longer be able to sign in.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteUserId(null)} className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button onClick={() => handleDeleteUser(deleteUserId!)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Remove</button>
             </div>
           </div>
         </div>
