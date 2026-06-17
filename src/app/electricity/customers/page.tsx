@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import type { Customer, PaymentMethod } from '@/lib/electricityTypes'
-import { formatAUD, calculateProRataBill } from '@/lib/electricityUtils'
+import { formatAUD, calculateProRataBill, getCustomerBalance } from '@/lib/electricityUtils'
 
 const today = new Date().toISOString().split('T')[0]
 
@@ -20,7 +20,7 @@ const EMPTY: Omit<Customer, 'id'> = {
 
 export default function CustomersPage() {
   const {
-    customers, apartments, buildings, readings, settings,
+    customers, apartments, buildings, readings, settings, invoices,
     addCustomer, updateCustomer, removeCustomer, offboardCustomer, setVacateRequest, isLoaded,
   } = useElectricity()
 
@@ -46,6 +46,16 @@ export default function CustomersPage() {
 
   const aptMap = useMemo(() => new Map(apartments.map(a => [a.id, a])), [apartments])
   const bldMap = useMemo(() => new Map(buildings.map(b => [b.id, b])), [buildings])
+
+  const balanceMap = useMemo(() => {
+    const m = new Map<string, number>()
+    const td = new Date().toISOString().split('T')[0]
+    for (const c of customers) {
+      const b = getCustomerBalance(invoices, c.id, td)
+      m.set(c.id, b.balance)
+    }
+    return m
+  }, [customers, invoices])
 
   // Auto-open finalize modal from disconnection-request email deep-link
   useEffect(() => {
@@ -271,13 +281,14 @@ export default function CustomersPage() {
 
       {/* Table — overflow-x-auto so columns never clip */}
       <div className="card overflow-x-auto">
-        <table className="w-full text-sm min-w-[900px]">
+        <table className="w-full text-sm min-w-[1050px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
               <th className="table-header text-left px-4 py-3">Customer</th>
               <th className="table-header text-left px-4 py-3">Contact</th>
               <th className="table-header text-left px-4 py-3">Property</th>
               <th className="table-header text-left px-4 py-3">Banking</th>
+              <th className="table-header text-right px-4 py-3">Balance</th>
               <th className="table-header text-left px-4 py-3">Status</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -310,6 +321,7 @@ export default function CustomersPage() {
                   <option value="eft">EFT</option>
                 </select>
               </th>
+              <th className="px-3 py-2"></th>
               <th className="px-3 py-2">
                 <select value={showActive} onChange={e => setShowActive(e.target.value as typeof showActive)}
                   className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
@@ -324,7 +336,7 @@ export default function CustomersPage() {
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={6} className="py-10 text-center text-slate-400">No customers found</td></tr>
+              <tr><td colSpan={7} className="py-10 text-center text-slate-400">No customers found</td></tr>
             )}
             {filtered.map(c => {
               const apt = aptMap.get(c.apartmentId)
@@ -342,7 +354,10 @@ export default function CustomersPage() {
                         {c.firstName[0]}{c.lastName[0]}
                       </div>
                       <div>
-                        <p className="font-medium text-slate-800">{c.firstName} {c.lastName}</p>
+                        <Link href={`/electricity/customers/${c.id}`}
+                          className="font-medium text-slate-800 hover:text-indigo-600 hover:underline">
+                          {c.firstName} {c.lastName}
+                        </Link>
                         {movedOut
                           ? <p className="text-xs text-red-500">Moved out {c.moveOutDate}</p>
                           : isIncoming
@@ -386,6 +401,22 @@ export default function CustomersPage() {
                     {c.myobCardId && (
                       <span className="font-mono text-xs text-slate-300 bg-slate-50 px-1 py-0.5 rounded">{c.myobCardId}</span>
                     )}
+                  </td>
+                  {/* Balance */}
+                  <td className="px-4 py-3 text-right">
+                    {(() => {
+                      const bal = balanceMap.get(c.id) ?? 0
+                      if (bal > 0.005) return (
+                        <Link href={`/electricity/customers/${c.id}`}
+                          className="font-mono font-semibold text-sm text-red-700 hover:underline">
+                          {formatAUD(bal)}
+                        </Link>
+                      )
+                      if (bal < -0.005) return (
+                        <span className="font-mono font-semibold text-sm text-sky-700">({formatAUD(Math.abs(bal))})</span>
+                      )
+                      return <span className="text-slate-300 text-xs">—</span>
+                    })()}
                   </td>
                   {/* Status */}
                   <td className="px-4 py-3 min-w-[140px]">
