@@ -200,28 +200,35 @@ export default function ElectricityDashboard() {
       {/* ── KPI row (6 cards) ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-6 gap-3">
         {([
-          { label: 'Total Billed',  value: formatAUD(totalBilled),     sub: monthName(month, year),                       icon: FileText,     color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: 'Collected',     value: formatAUD(totalPaid),        sub: `${collectionRate.toFixed(1)}% rate`,          icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Outstanding',   value: formatAUD(totalOutstanding), sub: `${overdueCount} overdue`,                    icon: Clock,        color: 'text-amber-600',  bg: 'bg-amber-50' },
-          { label: 'Occupancy',     value: `${occupancy.toFixed(0)}%`,  sub: `${activeCustomers.length} of ${apartments.length}`, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Vacant Units',  value: String(vacantCount),         sub: 'available to lease',                         icon: Building2,    color: 'text-slate-500',  bg: 'bg-slate-100' },
+          { label: 'Total Billed',  value: formatAUD(totalBilled),     sub: monthName(month, year),                       icon: FileText,     color: 'text-indigo-600',  bg: 'bg-indigo-50',   href: '/electricity/invoices' },
+          { label: 'Collected',     value: formatAUD(totalPaid),        sub: `${collectionRate.toFixed(1)}% rate`,          icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  href: undefined },
+          { label: 'Outstanding',   value: formatAUD(totalOutstanding), sub: `${overdueCount} overdue`,                    icon: Clock,        color: 'text-amber-600',   bg: 'bg-amber-50',    href: '/electricity/debtors' },
+          { label: 'Occupancy',     value: `${occupancy.toFixed(0)}%`,  sub: `${activeCustomers.length} of ${apartments.length}`, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50',   href: undefined },
+          { label: 'Vacant Units',  value: String(vacantCount),         sub: 'available to lease',                         icon: Building2,    color: 'text-slate-500',   bg: 'bg-slate-100',   href: undefined },
           {
             label: 'Readings', value: `${monthReadings.length}`,
             sub: missingReadings > 0 ? `${missingReadings} missing` : 'All covered',
             icon: Zap,
             color: missingReadings > 0 ? 'text-amber-600' : 'text-emerald-600',
             bg:    missingReadings > 0 ? 'bg-amber-50'    : 'bg-emerald-50',
+            href: '/electricity/usage' as string | undefined,
           },
-        ] as const).map(s => (
-          <div key={s.label} className="card p-4">
-            <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center mb-3`}>
-              <s.icon size={15} className={s.color} />
-            </div>
-            <p className="text-xs text-slate-400 font-medium">{s.label}</p>
-            <p className="text-xl font-bold text-slate-900 mt-0.5 leading-tight">{s.value}</p>
-            <p className="text-xs text-slate-400 mt-1">{s.sub}</p>
-          </div>
-        ))}
+        ]).map(s => {
+          const Icon = s.icon
+          const inner = (
+            <>
+              <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center mb-3`}>
+                <Icon size={15} className={s.color} />
+              </div>
+              <p className="text-xs text-slate-400 font-medium">{s.label}</p>
+              <p className="text-xl font-bold text-slate-900 mt-0.5 leading-tight">{s.value}</p>
+              <p className="text-xs text-slate-400 mt-1">{s.sub}</p>
+            </>
+          )
+          return s.href
+            ? <Link key={s.label} href={s.href} className="card p-4 hover:border-indigo-300 hover:shadow-sm transition-all">{inner}</Link>
+            : <div key={s.label} className="card p-4">{inner}</div>
+        })}
       </div>
 
       {/* ── Alerts ───────────────────────────────────────────────────────── */}
