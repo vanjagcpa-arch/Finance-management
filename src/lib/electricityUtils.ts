@@ -272,6 +272,48 @@ export function generateMYOBReceiptsExport(invoices: ElectricityInvoice[], custo
   return [csvRow(headers), ...rows].join('\n')
 }
 
+export interface UsageAnomaly {
+  invoiceId: string
+  apartmentId: string
+  customerId: string
+  issue: 'spike' | 'drop' | 'zero'
+  currentUsage: number
+  avgUsage: number
+  pctDiff: number
+}
+
+export function detectUsageAnomalies(
+  invoices: ElectricityInvoice[],
+  readings: MeterReading[],
+  month: number,
+  year: number,
+  spikeThresholdPct = 50,
+  dropThresholdPct  = 50,
+  minAvgForDrop     = 50,
+): UsageAnomaly[] {
+  const anomalies: UsageAnomaly[] = []
+  for (const inv of invoices) {
+    if (inv.isAdjustment || inv.status === 'cancelled') continue
+    const history = readings
+      .filter(r => r.apartmentId === inv.apartmentId && !(r.month === month && r.year === year))
+      .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))
+      .slice(0, 11)
+    if (history.length < 2) continue
+    const avgUsage = Math.round(history.reduce((s, r) => s + r.usage, 0) / history.length)
+    if (avgUsage === 0) continue
+    const current = inv.usage
+    const pctDiff  = Math.round(((current - avgUsage) / avgUsage) * 100)
+    if (current === 0 && avgUsage >= minAvgForDrop) {
+      anomalies.push({ invoiceId: inv.id, apartmentId: inv.apartmentId, customerId: inv.customerId, issue: 'zero', currentUsage: current, avgUsage, pctDiff: -100 })
+    } else if (pctDiff >= spikeThresholdPct) {
+      anomalies.push({ invoiceId: inv.id, apartmentId: inv.apartmentId, customerId: inv.customerId, issue: 'spike', currentUsage: current, avgUsage, pctDiff })
+    } else if (pctDiff <= -dropThresholdPct && avgUsage >= minAvgForDrop) {
+      anomalies.push({ invoiceId: inv.id, apartmentId: inv.apartmentId, customerId: inv.customerId, issue: 'drop', currentUsage: current, avgUsage, pctDiff })
+    }
+  }
+  return anomalies.sort((a, b) => Math.abs(b.pctDiff) - Math.abs(a.pctDiff))
+}
+
 export function downloadFile(content: string | Blob, filename: string, mimeType = 'text/plain') {
   const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType })
   const url = URL.createObjectURL(blob)
