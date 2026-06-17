@@ -10,10 +10,13 @@ import { formatAUD, monthName } from '@/lib/electricityUtils'
 
 const PAGE_SIZE = 25
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-  const d = new Date(2026, 5 - i, 1)
-  return { month: d.getMonth() + 1, year: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
-})
+const MONTHS = (() => {
+  const now = new Date()
+  return Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + 6 - i, 1)
+    return { month: d.getMonth() + 1, year: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
+  })
+})()
 
 type UnitFilter = 'all' | 'occupied' | 'vacant' | 'no_reading' | 'overdue' | 'final'
 
@@ -27,8 +30,8 @@ function pagRange(cur: number, total: number): (number | '…')[] {
 export default function ElectricityDashboard() {
   const { customers, invoices, readings, buildings, apartments, isLoaded } = useElectricity()
 
-  const [month,          setMonth]          = useState(5)
-  const [year,           setYear]           = useState(2026)
+  const [month,          setMonth]          = useState(() => new Date().getMonth() + 1)
+  const [year,           setYear]           = useState(() => new Date().getFullYear())
   const [search,         setSearch]         = useState('')
   const [filterBuilding, setFilterBuilding] = useState('')
   const [filterStatus,   setFilterStatus]   = useState<UnitFilter>('all')

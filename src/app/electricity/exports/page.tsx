@@ -18,10 +18,13 @@ import type { ABATransaction } from '@/lib/electricityUtils'
 
 type Tab = 'aba' | 'myob' | 'ezidebit'
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-  const d = new Date(2026, 5 - i, 1)
-  return { month: d.getMonth() + 1, year: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
-})
+const MONTHS = (() => {
+  const now = new Date()
+  return Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + 6 - i, 1)
+    return { month: d.getMonth() + 1, year: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
+  })
+})()
 
 // ── Row state ──────────────────────────────────────────────────────────────────
 interface ABARow extends ABATransaction {
@@ -44,8 +47,8 @@ export default function ExportsPage() {
   const [tab, setTab] = useState<Tab>('aba')
 
   // ── ABA state ──────────────────────────────────────────────────────────────
-  const [abaMonth, setAbaMonth] = useState(5)
-  const [abaYear,  setAbaYear]  = useState(2026)
+  const [abaMonth, setAbaMonth] = useState(() => new Date().getMonth() + 1)
+  const [abaYear,  setAbaYear]  = useState(() => new Date().getFullYear())
   const [processDate, setProcessDate] = useState(todayStr)
   const [search,  setSearch]  = useState('')
   const [filterBld, setFilterBld] = useState('')
@@ -53,12 +56,12 @@ export default function ExportsPage() {
   const [rowsInit, setRowsInit] = useState(false)
 
   // ── MYOB state ─────────────────────────────────────────────────────────────
-  const [myobMonth, setMyobMonth] = useState(5)
-  const [myobYear,  setMyobYear]  = useState(2026)
+  const [myobMonth, setMyobMonth] = useState(() => new Date().getMonth() + 1)
+  const [myobYear,  setMyobYear]  = useState(() => new Date().getFullYear())
 
   // ── Ezidebit state ─────────────────────────────────────────────────────────
-  const [eziMonth,  setEziMonth]  = useState(5)
-  const [eziYear,   setEziYear]   = useState(2026)
+  const [eziMonth,  setEziMonth]  = useState(() => new Date().getMonth() + 1)
+  const [eziYear,   setEziYear]   = useState(() => new Date().getFullYear())
   const [eziProcessDate, setEziProcessDate] = useState(todayStr)
   const [eziStatuses, setEziStatuses] = useState<string[]>(['sent', 'overdue'])
 

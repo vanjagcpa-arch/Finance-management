@@ -5,17 +5,20 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell
 import { useElectricity } from '@/lib/ElectricityContext'
 import { formatAUD, monthName, shortMonthLabel } from '@/lib/electricityUtils'
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-  const d = new Date(2026, 5 - i, 1)
-  return { month: d.getMonth() + 1, year: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
-})
+const MONTHS = (() => {
+  const now = new Date()
+  return Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + 6 - i, 1)
+    return { month: d.getMonth() + 1, year: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
+  })
+})()
 
 const BUILDING_COLORS = ['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#ef4444']
 
 export default function SummaryPage() {
   const { buildings, apartments, customers, invoices, readings, isLoaded } = useElectricity()
-  const [month, setMonth] = useState(5)
-  const [year,  setYear]  = useState(2026)
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1)
+  const [year,  setYear]  = useState(() => new Date().getFullYear())
 
   const aptMap      = useMemo(() => new Map(apartments.map(a => [a.id, a])), [apartments])
   const custMap     = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])

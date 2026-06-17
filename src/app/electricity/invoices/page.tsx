@@ -9,17 +9,20 @@ import { useElectricity } from '@/lib/ElectricityContext'
 import { formatAUD, monthName, detectUsageAnomalies } from '@/lib/electricityUtils'
 import type { ElectricityInvoice } from '@/lib/electricityTypes'
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-  const d = new Date(2026, 5 - i, 1)
-  return { month: d.getMonth() + 1, year: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
-})
+const MONTHS = (() => {
+  const now = new Date()
+  return Array.from({ length: 24 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + 6 - i, 1)
+    return { month: d.getMonth() + 1, year: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
+  })
+})()
 
 type SendStatus = 'sending' | 'sent' | 'failed'
 
 export default function InvoicesPage() {
   const { customers, invoices, readings, settings, buildings, apartments, upsertInvoices, updateInvoice, isLoaded } = useElectricity()
-  const [selectedMonth, setSelectedMonth] = useState(5)
-  const [selectedYear, setSelectedYear] = useState(2026)
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1)
+  const [selectedYear,  setSelectedYear]  = useState(() => new Date().getFullYear())
   const [filterBuilding, setFilterBuilding] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [filterAnomaly, setFilterAnomaly] = useState(false)
