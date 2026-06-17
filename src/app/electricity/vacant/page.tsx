@@ -1,47 +1,49 @@
 'use client'
-import { useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Home, Send, Check, Building2, AlertTriangle, Search, ChevronRight, Mail, Phone, Zap } from 'lucide-react'
+import { Home, Send, Check, Building2, AlertTriangle, Search, ChevronRight, Mail, Phone, Zap, Edit2, X, Save } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { monthName } from '@/lib/electricityUtils'
+import type { Apartment } from '@/lib/electricityTypes'
 
 interface VacantUnit {
-  apartment: { id: string; unitNumber: string; floor: number; meterNumber: string; buildingId: string }
-  building: { id: string; name: string; address: string; suburb: string; state: string; postcode: string; agencyName?: string; agentName?: string; agentEmail?: string; agentPhone?: string; lowUsageThreshold: number; highUsageThreshold: number }
+  apartment: Apartment
+  building: { id: string; name: string; address: string; suburb: string; state: string; postcode: string; lowUsageThreshold: number; highUsageThreshold: number }
   latestReading: { usage: number; month: number; year: number; readingDate: string } | null
   hasUsage: boolean
 }
 
+interface AgentForm { agencyName: string; agentName: string; agentEmail: string; agentPhone: string }
+
 export default function VacantUnitsPage() {
-  const { customers, apartments, buildings, readings, settings, isLoaded } = useElectricity()
+  const { customers, apartments, buildings, readings, settings, updateApartment, isLoaded } = useElectricity()
   const [filter, setFilter] = useState<'usage' | 'all'>('usage')
   const [search, setSearch] = useState('')
   const [sending, setSending] = useState<string | null>(null)
   const [sent, setSent] = useState<string[]>([])
   const [filterBld, setFilterBld] = useState('')
+  const [editingAgent, setEditingAgent] = useState<string | null>(null)
+  const [agentForm, setAgentForm] = useState<AgentForm>({ agencyName: '', agentName: '', agentEmail: '', agentPhone: '' })
 
-  // Find most recent 2 months that have readings
   const recentMonths = useMemo(() => {
     const seen: Record<string, boolean> = {}
-    const months = readings
+    return readings
       .map(r => `${r.year}-${r.month}`)
       .filter(k => { if (seen[k]) return false; seen[k] = true; return true })
       .map(k => { const [y, m] = k.split('-'); return { year: parseInt(y), month: parseInt(m) } })
       .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))
-    return months.slice(0, 2)
+      .slice(0, 2)
   }, [readings])
 
   const vacantUnits = useMemo<VacantUnit[]>(() => {
     return apartments
       .map(apt => {
-        const aptCustomers = customers.filter(c => c.apartmentId === apt.id)
-        const activeCustomers = aptCustomers.filter(c => !c.moveOutDate)
-        if (activeCustomers.length > 0) return null // occupied
+        const activeCustomers = customers.filter(c => c.apartmentId === apt.id && !c.moveOutDate)
+        if (activeCustomers.length > 0) return null
 
         const building = buildings.find(b => b.id === apt.buildingId)
         if (!building) return null
 
-        // Find most recent reading with usage
         const aptReadings = readings
           .filter(r => r.apartmentId === apt.id && recentMonths.some(m => m.year === r.year && m.month === r.month))
           .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month))
@@ -57,7 +59,6 @@ export default function VacantUnitsPage() {
       })
       .filter((u): u is VacantUnit => u !== null)
       .sort((a, b) => {
-        // Usage first, then by usage amount desc
         if (a.hasUsage !== b.hasUsage) return a.hasUsage ? -1 : 1
         return (b.latestReading?.usage ?? 0) - (a.latestReading?.usage ?? 0)
       })
@@ -71,8 +72,8 @@ export default function VacantUnitsPage() {
       list = list.filter(u =>
         u.apartment.unitNumber.toLowerCase().includes(q) ||
         u.building.name.toLowerCase().includes(q) ||
-        u.building.agencyName?.toLowerCase().includes(q) ||
-        u.building.agentName?.toLowerCase().includes(q)
+        (u.apartment.agencyName ?? '').toLowerCase().includes(q) ||
+        (u.apartment.agentName ?? '').toLowerCase().includes(q)
       )
     }
     return list
@@ -82,17 +83,32 @@ export default function VacantUnitsPage() {
   const totalVacant = vacantUnits.length
   const buildingsAffected = new Set(vacantUnits.filter(u => u.hasUsage).map(u => u.building.id)).size
 
+  function startEditAgent(unit: VacantUnit) {
+    setEditingAgent(unit.apartment.id)
+    setAgentForm({
+      agencyName: unit.apartment.agencyName ?? '',
+      agentName: unit.apartment.agentName ?? '',
+      agentEmail: unit.apartment.agentEmail ?? '',
+      agentPhone: unit.apartment.agentPhone ?? '',
+    })
+  }
+
+  function saveAgent(unit: VacantUnit) {
+    updateApartment({ ...unit.apartment, ...agentForm })
+    setEditingAgent(null)
+  }
+
   async function handleEmailAgent(unit: VacantUnit) {
-    if (!unit.building.agentEmail || !unit.latestReading) return
+    if (!unit.apartment.agentEmail || !unit.latestReading) return
     setSending(unit.apartment.id)
     try {
       const res = await fetch('/api/send-agent-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: unit.building.agentEmail,
-          agentName: unit.building.agentName ?? '',
-          agencyName: unit.building.agencyName ?? '',
+          to: unit.apartment.agentEmail,
+          agentName: unit.apartment.agentName ?? '',
+          agencyName: unit.apartment.agencyName ?? '',
           buildingName: unit.building.name,
           buildingAddress: `${unit.building.address}, ${unit.building.suburb} ${unit.building.state} ${unit.building.postcode}`,
           unitNumber: unit.apartment.unitNumber,
@@ -130,10 +146,6 @@ export default function VacantUnitsPage() {
             <h1 className="text-2xl font-bold text-slate-900">Vacant Units</h1>
             <p className="text-sm text-slate-500 mt-0.5">Apartments with no active tenant — flag usage and contact managing agents</p>
           </div>
-          <Link href="/electricity/settings?tab=buildings"
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
-            <Building2 size={14} />Manage Buildings
-          </Link>
         </div>
 
         {/* Stats */}
@@ -189,9 +201,6 @@ export default function VacantUnitsPage() {
             <p className="text-slate-500 font-medium">
               {filter === 'usage' ? 'No vacant units with recent usage detected.' : 'No vacant units found.'}
             </p>
-            <p className="text-slate-400 text-sm mt-1">
-              {filter === 'usage' ? 'All units with meter readings have active tenants.' : 'All apartments have active tenants.'}
-            </p>
           </div>
         )}
 
@@ -212,103 +221,127 @@ export default function VacantUnitsPage() {
                 {filtered.map(unit => {
                   const isSent = sent.includes(unit.apartment.id)
                   const isSending = sending === unit.apartment.id
-                  const hasAgent = !!unit.building.agentEmail
+                  const isEditing = editingAgent === unit.apartment.id
+                  const hasAgent = !!unit.apartment.agentEmail
                   return (
-                    <tr key={unit.apartment.id} className={`hover:bg-slate-50 transition-colors ${unit.hasUsage ? 'bg-amber-50/30' : ''}`}>
-                      {/* Unit */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {unit.hasUsage && <Zap size={13} className="text-amber-500 flex-shrink-0" />}
-                          <div>
-                            <p className="font-semibold text-slate-900 text-sm">Unit {unit.apartment.unitNumber}</p>
-                            <p className="text-xs text-slate-400">Level {unit.apartment.floor} · {unit.apartment.meterNumber}</p>
-                          </div>
-                        </div>
-                      </td>
-                      {/* Building */}
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-slate-700">{unit.building.name}</p>
-                        <p className="text-xs text-slate-400">{unit.building.address}</p>
-                      </td>
-                      {/* Usage */}
-                      <td className="px-4 py-3">
-                        {unit.latestReading && unit.hasUsage ? (
-                          <div>
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-                              <AlertTriangle size={10} />{unit.latestReading.usage.toLocaleString()} kWh
-                            </span>
-                            <p className="text-xs text-slate-400 mt-1">{monthName(unit.latestReading.month, unit.latestReading.year)} · read {unit.latestReading.readingDate}</p>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400">No recent usage</span>
-                        )}
-                      </td>
-                      {/* Agent */}
-                      <td className="px-4 py-3">
-                        {unit.building.agentName || unit.building.agencyName ? (
-                          <div>
-                            <p className="text-sm font-medium text-slate-700">{unit.building.agentName ?? '—'}</p>
-                            {unit.building.agencyName && <p className="text-xs text-slate-400">{unit.building.agencyName}</p>}
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              {unit.building.agentEmail && (
-                                <a href={`mailto:${unit.building.agentEmail}`} className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
-                                  <Mail size={10} />{unit.building.agentEmail}
-                                </a>
-                              )}
-                              {unit.building.agentPhone && (
-                                <span className="flex items-center gap-1 text-xs text-slate-500">
-                                  <Phone size={10} />{unit.building.agentPhone}
-                                </span>
-                              )}
+                    <React.Fragment key={unit.apartment.id}>
+                      <tr className={`hover:bg-slate-50 transition-colors ${unit.hasUsage ? 'bg-amber-50/30' : ''}`}>
+                        {/* Unit */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {unit.hasUsage && <Zap size={13} className="text-amber-500 flex-shrink-0" />}
+                            <div>
+                              <p className="font-semibold text-slate-900 text-sm">Unit {unit.apartment.unitNumber}</p>
+                              <p className="text-xs text-slate-400">Level {unit.apartment.floor} · {unit.apartment.meterNumber}</p>
                             </div>
                           </div>
-                        ) : (
-                          <Link href="/electricity/settings" className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
-                            <ChevronRight size={11} />Add agent to building
-                          </Link>
-                        )}
-                      </td>
-                      {/* Actions */}
-                      <td className="px-4 py-3 text-right">
-                        {unit.hasUsage && (
-                          isSent ? (
-                            <span className="flex items-center justify-end gap-1 text-xs font-medium text-emerald-600">
-                              <Check size={13} />Notified
-                            </span>
+                        </td>
+                        {/* Building */}
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-medium text-slate-700">{unit.building.name}</p>
+                          <p className="text-xs text-slate-400">{unit.building.address}</p>
+                        </td>
+                        {/* Usage */}
+                        <td className="px-4 py-3">
+                          {unit.latestReading && unit.hasUsage ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                <AlertTriangle size={10} />{unit.latestReading.usage.toLocaleString()} kWh
+                              </span>
+                              <p className="text-xs text-slate-400 mt-1">{monthName(unit.latestReading.month, unit.latestReading.year)} · {unit.latestReading.readingDate}</p>
+                            </div>
                           ) : (
+                            <span className="text-xs text-slate-400">No recent usage</span>
+                          )}
+                        </td>
+                        {/* Agent */}
+                        <td className="px-4 py-3">
+                          {unit.apartment.agentName || unit.apartment.agencyName ? (
+                            <div>
+                              <p className="text-sm font-medium text-slate-700">{unit.apartment.agentName ?? '—'}</p>
+                              {unit.apartment.agencyName && <p className="text-xs text-slate-400">{unit.apartment.agencyName}</p>}
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {unit.apartment.agentEmail && (
+                                  <a href={`mailto:${unit.apartment.agentEmail}`} className="flex items-center gap-1 text-xs text-indigo-600 hover:underline">
+                                    <Mail size={10} />{unit.apartment.agentEmail}
+                                  </a>
+                                )}
+                                {unit.apartment.agentPhone && (
+                                  <span className="flex items-center gap-1 text-xs text-slate-500">
+                                    <Phone size={10} />{unit.apartment.agentPhone}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">No agent assigned</span>
+                          )}
+                        </td>
+                        {/* Actions */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
                             <button
-                              onClick={() => handleEmailAgent(unit)}
-                              disabled={!hasAgent || isSending}
-                              title={!hasAgent ? 'Add agent email in Settings → Buildings' : 'Email managing agent'}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors
-                                disabled:opacity-40 disabled:cursor-not-allowed
-                                border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100">
-                              <Send size={11} className={isSending ? 'animate-pulse' : ''} />
-                              {isSending ? 'Sending…' : 'Email Agent'}
+                              onClick={() => isEditing ? setEditingAgent(null) : startEditAgent(unit)}
+                              className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+                              {isEditing ? <X size={11} /> : <Edit2 size={11} />}
+                              {isEditing ? 'Cancel' : 'Edit Agent'}
                             </button>
-                          )
-                        )}
-                      </td>
-                    </tr>
+                            {unit.hasUsage && (
+                              isSent ? (
+                                <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                                  <Check size={13} />Notified
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => handleEmailAgent(unit)}
+                                  disabled={!hasAgent || isSending}
+                                  title={!hasAgent ? 'Add agent email first' : 'Email managing agent'}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors
+                                    disabled:opacity-40 disabled:cursor-not-allowed
+                                    border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100">
+                                  <Send size={11} className={isSending ? 'animate-pulse' : ''} />
+                                  {isSending ? 'Sending…' : 'Email Agent'}
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isEditing && (
+                        <tr className="bg-slate-50 border-t border-slate-200">
+                          <td colSpan={5} className="px-4 py-4">
+                            <div className="flex items-end gap-3 flex-wrap">
+                              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider w-full mb-1">Managing Agent — Unit {unit.apartment.unitNumber}</div>
+                              {([
+                                ['agencyName', 'Agency Name'],
+                                ['agentName', 'Agent Name'],
+                                ['agentEmail', 'Agent Email'],
+                                ['agentPhone', 'Agent Phone'],
+                              ] as const).map(([field, label]) => (
+                                <div key={field} className="flex-1 min-w-[160px]">
+                                  <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                                  <input
+                                    type={field === 'agentEmail' ? 'email' : 'text'}
+                                    value={agentForm[field]}
+                                    onChange={e => setAgentForm(f => ({ ...f, [field]: e.target.value }))}
+                                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder={label}
+                                  />
+                                </div>
+                              ))}
+                              <button onClick={() => saveAgent(unit)}
+                                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+                                <Save size={13} />Save
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {/* Tip */}
-        {!buildings.some(b => b.agentEmail) && (
-          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
-            <Building2 size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-blue-800">Set up managing agents</p>
-              <p className="text-sm text-blue-700 mt-0.5">
-                Add agent contact details to each building in{' '}
-                <Link href="/electricity/settings" className="underline font-medium">Settings → Buildings</Link>{' '}
-                to enable one-click email notifications for vacant units with usage.
-              </p>
-            </div>
           </div>
         )}
 

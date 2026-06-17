@@ -452,6 +452,26 @@ export default function CustomersPage() {
                   {field('myobCardId','MYOB Card ID')}
                 </div>
               </div>
+              {editing && (() => {
+                const apt = aptMap.get(editing.apartmentId)
+                if (!apt) return null
+                return (
+                  <div className="pt-3 border-t border-slate-100">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Managing Agent</p>
+                    {apt.agentName || apt.agencyName ? (
+                      <div className="text-xs text-slate-600 space-y-0.5">
+                        {apt.agentName && <p><span className="font-medium">Agent:</span> {apt.agentName}</p>}
+                        {apt.agencyName && <p><span className="font-medium">Agency:</span> {apt.agencyName}</p>}
+                        {apt.agentEmail && <p><span className="font-medium">Email:</span> {apt.agentEmail}</p>}
+                        {apt.agentPhone && <p><span className="font-medium">Phone:</span> {apt.agentPhone}</p>}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400">No agent assigned</p>
+                    )}
+                    <Link href="/electricity/vacant" className="text-xs text-indigo-600 hover:underline mt-2 inline-block">Edit on Vacant Units page →</Link>
+                  </div>
+                )
+              })()}
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
               <button onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-white">Cancel</button>
