@@ -47,15 +47,23 @@ export default function ElectricityDashboard() {
   const invoiceByApt  = useMemo(() => new Map(monthInvoices.map(i => [i.apartmentId, i])), [monthInvoices])
   const buildingMap   = useMemo(() => new Map(buildings.map(b => [b.id, b])), [buildings])
 
-  // ── KPIs ──────────────────────────────────────────────────────────────────
-  const totalBilled      = monthInvoices.reduce((s, i) => s + i.total, 0)
-  const totalPaid        = monthInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total, 0)
-  const totalOutstanding = monthInvoices.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((s, i) => s + i.total, 0)
-  const overdueCount     = monthInvoices.filter(i => i.status === 'overdue').length
-  const collectionRate   = totalBilled > 0 ? (totalPaid / totalBilled) * 100 : 0
-  const occupancy        = apartments.length > 0 ? (activeCustomers.length / apartments.length) * 100 : 0
-  const vacantCount      = apartments.length - activeCustomers.length
-  const finalBillCount   = customers.filter(c => c.moveOutDate).length
+  // ── KPIs — single pass over monthInvoices ─────────────────────────────────
+  const kpis = useMemo(() => {
+    let totalBilled = 0, totalPaid = 0, totalOutstanding = 0, overdueCount = 0
+    for (const i of monthInvoices) {
+      totalBilled += i.total
+      if (i.status === 'paid') totalPaid += i.total
+      if (i.status === 'sent' || i.status === 'overdue') totalOutstanding += i.total
+      if (i.status === 'overdue') overdueCount++
+    }
+    const collectionRate = totalBilled > 0 ? (totalPaid / totalBilled) * 100 : 0
+    const finalBillCount = customers.filter(c => !!c.moveOutDate).length
+    return { totalBilled, totalPaid, totalOutstanding, overdueCount, collectionRate, finalBillCount }
+  }, [monthInvoices, customers])
+  const { totalBilled, totalPaid, totalOutstanding, overdueCount, collectionRate, finalBillCount } = kpis
+
+  const occupancy     = apartments.length > 0 ? (activeCustomers.length / apartments.length) * 100 : 0
+  const vacantCount   = apartments.length - activeCustomers.length
 
   const occupiedWithReading = useMemo(() =>
     monthReadings.filter(r => {
@@ -65,6 +73,44 @@ export default function ElectricityDashboard() {
     [monthReadings, customerByApt]
   )
   const missingReadings = activeCustomers.length - occupiedWithReading
+
+  // ── Building stats — O(N) using pre-built Sets ────────────────────────────
+  const buildingStats = useMemo(() => {
+    const activeCustAptSet = new Set(activeCustomers.map(c => c.apartmentId))
+    const readingAptSet    = new Set(monthReadings.map(r => r.apartmentId))
+    const invoiceTotalByBld = new Map<string, number>()
+    monthInvoices.forEach(i => invoiceTotalByBld.set(i.buildingId, (invoiceTotalByBld.get(i.buildingId) ?? 0) + i.total))
+    const aptIdsByBld = new Map<string, string[]>()
+    apartments.forEach(a => {
+      const ids = aptIdsByBld.get(a.buildingId) ?? []
+      ids.push(a.id)
+      aptIdsByBld.set(a.buildingId, ids)
+    })
+    return buildings.map(b => {
+      const aptIds = aptIdsByBld.get(b.id) ?? []
+      const occ    = aptIds.filter(id => activeCustAptSet.has(id)).length
+      const reads  = aptIds.filter(id => readingAptSet.has(id)).length
+      const bTotal = invoiceTotalByBld.get(b.id) ?? 0
+      const pct    = aptIds.length > 0 ? occ / aptIds.length : 0
+      return { b, total: aptIds.length, occ, reads, bTotal, pct }
+    })
+  }, [buildings, apartments, activeCustomers, monthReadings, monthInvoices])
+
+  // ── Status breakdown — single pass ────────────────────────────────────────
+  const statusBreakdown = useMemo(() => {
+    const counts = { paid: 0, sent: 0, draft: 0, overdue: 0 }
+    for (const i of monthInvoices) {
+      if (i.status === 'paid' || i.status === 'sent' || i.status === 'draft' || i.status === 'overdue') {
+        counts[i.status]++
+      }
+    }
+    return (['paid', 'sent', 'draft', 'overdue'] as const).map(key => ({
+      key,
+      label: key.charAt(0).toUpperCase() + key.slice(1),
+      count: counts[key],
+      bar: key === 'paid' ? 'bg-emerald-500' : key === 'sent' ? 'bg-indigo-500' : key === 'overdue' ? 'bg-red-500' : 'bg-slate-300',
+    }))
+  }, [monthInvoices])
 
   // ── All rows joined ───────────────────────────────────────────────────────
   const allRows = useMemo(() => apartments.map(apt => {
@@ -108,13 +154,6 @@ export default function ElectricityDashboard() {
   const alerts: { type: 'danger' | 'warning'; msg: string; href: string }[] = []
   if (overdueCount > 0)     alerts.push({ type: 'danger',  msg: `${overdueCount} overdue invoice${overdueCount > 1 ? 's' : ''} — action required`,                          href: '/electricity/invoices' })
   if (missingReadings > 0)  alerts.push({ type: 'warning', msg: `${missingReadings} occupied unit${missingReadings > 1 ? 's are' : ' is'} missing a reading for ${monthName(month, year)}`, href: '/electricity/usage' })
-
-  const statusBreakdown = (['paid', 'sent', 'draft', 'overdue'] as const).map(key => ({
-    key,
-    label: key.charAt(0).toUpperCase() + key.slice(1),
-    count: monthInvoices.filter(i => i.status === key).length,
-    bar:   key === 'paid' ? 'bg-emerald-500' : key === 'sent' ? 'bg-indigo-500' : key === 'overdue' ? 'bg-red-500' : 'bg-slate-300',
-  }))
 
   const FILTER_TABS: { key: UnitFilter; label: string; count: number }[] = [
     { key: 'all',        label: 'All Units',    count: apartments.length },
@@ -239,23 +278,17 @@ export default function ElectricityDashboard() {
               </tr>
             </thead>
             <tbody>
-              {buildings.map(b => {
-                const apts  = apartments.filter(a => a.buildingId === b.id)
-                const occ   = apts.filter(a => activeCustomers.find(c => c.apartmentId === a.id))
-                const reads = monthReadings.filter(r => apts.find(a => a.id === r.apartmentId))
-                const bTotal = monthInvoices.filter(i => i.buildingId === b.id).reduce((s, i) => s + i.total, 0)
-                const pct = occ.length / apts.length
-                return (
+              {buildingStats.map(({ b, total, occ, reads, bTotal, pct }) => (
                   <tr key={b.id} className="data-row">
                     <td className="py-2">
                       <p className="font-medium text-slate-800">{b.name}</p>
                       <p className="text-slate-400">{b.suburb}</p>
                     </td>
-                    <td className="py-2 text-right text-slate-600">{apts.length}</td>
-                    <td className="py-2 text-right text-slate-600">{occ.length}</td>
+                    <td className="py-2 text-right text-slate-600">{total}</td>
+                    <td className="py-2 text-right text-slate-600">{occ}</td>
                     <td className="py-2 text-right">
-                      <span className={reads.length < occ.length ? 'text-amber-600 font-semibold' : 'text-emerald-600'}>
-                        {reads.length}/{occ.length}
+                      <span className={reads < occ ? 'text-amber-600 font-semibold' : 'text-emerald-600'}>
+                        {reads}/{occ}
                       </span>
                     </td>
                     <td className="py-2 text-right font-mono text-slate-800">{formatAUD(bTotal)}</td>
@@ -265,8 +298,7 @@ export default function ElectricityDashboard() {
                       </span>
                     </td>
                   </tr>
-                )
-              })}
+                ))}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-slate-200">
