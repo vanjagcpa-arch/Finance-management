@@ -149,7 +149,8 @@ export async function POST(req: NextRequest) {
   try {
     const payload: SendEzidebitDDRPayload = await req.json()
     const { data, error } = await resend.emails.send({
-      from: `${payload.companyName} <${payload.fromEmail}>`,
+      from: `${payload.companyName} <onboarding@resend.dev>`,
+      replyTo: payload.fromEmail,
       to: [payload.to],
       subject: `Set up your Direct Debit — ${payload.buildingName} Unit ${payload.unitNumber}`,
       html: buildEmail(payload),

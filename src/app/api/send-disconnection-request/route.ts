@@ -128,13 +128,15 @@ export async function POST(req: NextRequest) {
     const p: DisconnectionRequestPayload = await req.json()
     const [adminResult, tenantResult] = await Promise.all([
       resend.emails.send({
-        from: `${p.companyName} <${p.fromEmail}>`,
+        from: `${p.companyName} <onboarding@resend.dev>`,
+        replyTo: p.fromEmail,
         to: [p.companyEmail],
         subject: `Disconnection Request — ${p.customerName}, Unit ${p.unitNumber} (Move-out: ${p.moveOutDate})`,
         html: buildAdminEmail(p),
       }),
       resend.emails.send({
-        from: `${p.companyName} <${p.fromEmail}>`,
+        from: `${p.companyName} <onboarding@resend.dev>`,
+        replyTo: p.fromEmail,
         to: [p.customerEmail],
         subject: `Disconnection Request Received — ${p.companyName}`,
         html: buildTenantAckEmail(p),

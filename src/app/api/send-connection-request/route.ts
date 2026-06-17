@@ -137,13 +137,15 @@ export async function POST(req: NextRequest) {
     const p: ConnectionRequestPayload = await req.json()
     const [adminResult, tenantResult] = await Promise.all([
       resend.emails.send({
-        from: `${p.companyName} <${p.fromEmail}>`,
+        from: `${p.companyName} <onboarding@resend.dev>`,
+        replyTo: p.fromEmail,
         to: [p.companyEmail],
         subject: `New Connection Request — Unit ${p.unitNumber}, ${p.buildingName} (${p.firstName} ${p.lastName})`,
         html: buildAdminEmail(p),
       }),
       resend.emails.send({
-        from: `${p.companyName} <${p.fromEmail}>`,
+        from: `${p.companyName} <onboarding@resend.dev>`,
+        replyTo: p.fromEmail,
         to: [p.email],
         subject: `Connection Request Received — ${p.companyName}`,
         html: buildTenantAckEmail(p),

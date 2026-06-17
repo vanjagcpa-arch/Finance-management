@@ -156,7 +156,8 @@ export async function POST(req: NextRequest) {
   try {
     const payload: SendWelcomePayload = await req.json()
     const { data, error } = await resend.emails.send({
-      from: `${payload.companyName} <${payload.fromEmail}>`,
+      from: `${payload.companyName} <onboarding@resend.dev>`,
+      replyTo: payload.fromEmail,
       to: [payload.to],
       subject: `Welcome to ${payload.companyName} — Account Activated`,
       html: buildWelcomeEmail(payload),
