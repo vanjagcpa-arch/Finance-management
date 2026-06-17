@@ -1,7 +1,7 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Download, Send, Check, Zap, Building2, User, Calendar, AlertTriangle, ExternalLink, PlusCircle, X, Minus } from 'lucide-react'
+import { ArrowLeft, Download, Send, Check, Zap, Building2, User, Calendar, AlertTriangle, ExternalLink, PlusCircle, X, Minus, RefreshCw } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLine, Cell, ResponsiveContainer } from 'recharts'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { formatAUD, formatDate, monthName, getUsageHistory, usageColor, downloadFile } from '@/lib/electricityUtils'
@@ -31,6 +31,7 @@ export default function InvoiceDetailPage() {
     date: new Date().toISOString().split('T')[0],
   })
   const [adjSaved, setAdjSaved] = useState(false)
+  const [recalculating, setRecalculating] = useState(false)
 
   const invoice  = useMemo(() => invoices.find(i => i.id === id), [invoices, id])
   const customer = useMemo(() => invoice ? customers.find(c => c.id === invoice.customerId) : undefined, [invoice, customers])
@@ -41,6 +42,30 @@ export default function InvoiceDetailPage() {
     invoices.filter(i => i.linkedInvoiceId === id && i.status !== 'cancelled'),
     [invoices, id]
   )
+
+  const linkedReading = useMemo(() =>
+    invoice ? readings.find(r => r.apartmentId === invoice.apartmentId && r.month === invoice.month && r.year === invoice.year) : undefined,
+    [readings, invoice]
+  )
+
+  function handleRecalculate() {
+    if (!invoice || !linkedReading) return
+    setRecalculating(true)
+    const { ratePerKwh, dailySupplyCharge, gstRate } = settings.tariff
+    const usage        = linkedReading.usage
+    const usageCharge  = Math.round(usage * ratePerKwh * 100) / 100
+    const supplyCharge = Math.round(invoice.daysInPeriod * dailySupplyCharge * 100) / 100
+    const subtotal     = Math.round((usageCharge + supplyCharge) * 100) / 100
+    const gst          = Math.round(subtotal * gstRate * 100) / 100
+    const total        = Math.round((subtotal + gst) * 100) / 100
+    updateInvoice({
+      ...invoice,
+      previousReading: linkedReading.previousReading,
+      currentReading: linkedReading.currentReading,
+      usage, ratePerKwh, usageCharge, supplyCharge, subtotal, gst, total,
+    })
+    setTimeout(() => setRecalculating(false), 800)
+  }
 
   const usageHistory = useMemo(() => {
     if (!invoice) return []
@@ -456,6 +481,13 @@ export default function InvoiceDetailPage() {
               onClick={() => { setMarkPaidDate(new Date().toISOString().split('T')[0]); setMarkPaidOpen(true) }}
               className="flex items-center gap-2 px-4 py-2 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-50 transition-colors">
               <Check size={14} />Mark Paid
+            </button>
+          )}
+          {linkedReading && !invoice.isAdjustment && invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+            <button onClick={handleRecalculate} disabled={recalculating}
+              className="flex items-center gap-2 px-4 py-2 border border-amber-200 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-50 disabled:opacity-50 transition-colors">
+              <RefreshCw size={14} className={recalculating ? 'animate-spin' : ''} />
+              {recalculating ? 'Recalculating…' : 'Recalculate'}
             </button>
           )}
           <button
