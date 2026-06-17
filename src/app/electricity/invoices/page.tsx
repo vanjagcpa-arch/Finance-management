@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import {
-  FileText, Search, Send, RefreshCw, Check, AlertTriangle, PlusCircle, Minus,
+  FileText, Send, RefreshCw, Check, AlertTriangle, PlusCircle, Minus,
   TrendingUp, TrendingDown, ZapOff, ChevronDown, ChevronUp, X, Zap,
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
@@ -29,7 +29,6 @@ export default function InvoicesPage() {
   const [sendProgress, setSendProgress] = useState<{ done: number; total: number } | null>(null)
   const [sendStatuses, setSendStatuses] = useState<Record<string, SendStatus>>({})
   const [toast, setToast] = useState('')
-  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [anomalyOpen, setAnomalyOpen] = useState(true)
   const [showReadinessPanel, setShowReadinessPanel] = useState(true)
 
@@ -198,25 +197,12 @@ export default function InvoicesPage() {
     }
     setSendingBatch(false)
     setSendProgress(null)
-    setSelected(new Set())
     showToast(failed > 0 ? `Sent ${sent}, failed ${failed}` : `${sent} invoice${sent !== 1 ? 's' : ''} sent`)
   }
 
-  function toggleSelect(id: string) {
-    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
-  function toggleSelectAll() {
-    const allIds = filtered.filter(i => i.status === 'draft').map(i => i.id)
-    const allSelected = allIds.every(id => selected.has(id))
-    setSelected(allSelected ? new Set() : new Set(allIds))
-  }
-
-  const draftInvoices  = useMemo(() => monthInvoices.filter(i => i.status === 'draft' && !i.isAdjustment), [monthInvoices])
-  const selectedDrafts = useMemo(() => filtered.filter(i => selected.has(i.id) && i.status === 'draft'), [filtered, selected])
-  const overdueCount   = useMemo(() => regularInvoices.filter(i => i.status === 'overdue').length, [regularInvoices])
-  const totalBilled    = useMemo(() => filtered.reduce((s, i) => s + i.total, 0), [filtered])
-  const filteredDraftCount = useMemo(() => filtered.filter(i => i.status === 'draft' && !i.isAdjustment).length, [filtered])
-  const allDraftsSelected  = filteredDraftCount > 0 && filtered.filter(i => i.status === 'draft').every(i => selected.has(i.id))
+  const draftInvoices = useMemo(() => monthInvoices.filter(i => i.status === 'draft' && !i.isAdjustment), [monthInvoices])
+  const overdueCount  = useMemo(() => regularInvoices.filter(i => i.status === 'overdue').length, [regularInvoices])
+  const totalBilled   = useMemo(() => filtered.reduce((s, i) => s + i.total, 0), [filtered])
 
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center"><div className="text-slate-400">Loading...</div></div>
 
@@ -246,7 +232,7 @@ export default function InvoicesPage() {
             onChange={e => {
               const [y, m] = e.target.value.split('-')
               setSelectedYear(+y); setSelectedMonth(+m)
-              setSelected(new Set()); setSendStatuses({})
+              setSendStatuses({})
               setShowReadinessPanel(true)
             }}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
@@ -450,96 +436,46 @@ export default function InvoicesPage() {
         ))}
       </div>
 
-      {/* ── Filter bar ── */}
-      <div className="flex gap-3 items-center flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search invoice, customer…"
-            className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        </div>
-        <select value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
-          <option value="">All Buildings</option>
-          {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
-          <option value="">All Status</option>
-          <option value="draft">Draft</option>
-          <option value="sent">Sent</option>
-          <option value="paid">Paid</option>
-          <option value="overdue">Overdue</option>
-        </select>
-        <button
-          onClick={() => setFilterAnomaly(f => !f)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition-colors
-            ${filterAnomaly ? 'bg-amber-500 text-white border-amber-500' : 'border-slate-200 text-slate-600 hover:border-amber-300 hover:text-amber-700'}`}>
-          <AlertTriangle size={13} />
-          Anomalies {anomalies.length > 0 && <span className={`text-xs font-bold ${filterAnomaly ? 'text-white' : 'text-amber-600'}`}>({anomalies.length})</span>}
-        </button>
-        {(filterStatus || filterBuilding || search || filterAnomaly) && (
-          <button onClick={() => { setSearch(''); setFilterBuilding(''); setFilterStatus(''); setFilterAnomaly(false) }}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700">
-            <X size={12} />Clear filters
+      {/* ── Action bar ── */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {draftInvoices.length > 0 && (
+          <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 flex-1">
+            <span className="text-sm text-indigo-800">
+              <strong>{draftInvoices.length}</strong> draft invoice{draftInvoices.length !== 1 ? 's' : ''} ready to send
+            </span>
+            {sendProgress && (
+              <div className="flex-1 mx-2">
+                <div className="h-1.5 bg-indigo-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-600 rounded-full transition-all duration-300"
+                    style={{ width: `${(sendProgress.done / sendProgress.total) * 100}%` }} />
+                </div>
+                <p className="text-xs text-indigo-600 mt-1">{sendProgress.done}/{sendProgress.total} sent</p>
+              </div>
+            )}
+            <button onClick={() => runBatchSend(draftInvoices)} disabled={sendingBatch}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors ml-auto">
+              <Send size={13} className={sendingBatch ? 'animate-pulse' : ''} />
+              Send All Drafts ({draftInvoices.length})
+            </button>
+          </div>
+        )}
+        {anomalies.length > 0 && (
+          <button
+            onClick={() => setFilterAnomaly(f => !f)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm border transition-colors
+              ${filterAnomaly ? 'bg-amber-500 text-white border-amber-500' : 'border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100'}`}>
+            <AlertTriangle size={13} />
+            {filterAnomaly ? 'Show all' : `${anomalies.length} anomal${anomalies.length !== 1 ? 'ies' : 'y'}`}
           </button>
         )}
         <span className="text-xs text-slate-400 ml-auto">{filtered.length} results · {formatAUD(totalBilled)}</span>
       </div>
 
-      {/* ── Batch action bar ── */}
-      {(selectedDrafts.length > 0 || draftInvoices.length > 0) && (
-        <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-          <span className="text-sm text-indigo-800">
-            {selectedDrafts.length > 0
-              ? <><strong>{selectedDrafts.length}</strong> invoice{selectedDrafts.length !== 1 ? 's' : ''} selected</>
-              : <><strong>{draftInvoices.length}</strong> draft invoice{draftInvoices.length !== 1 ? 's' : ''} ready to send</>
-            }
-          </span>
-          {sendProgress && (
-            <div className="flex-1 mx-2">
-              <div className="h-1.5 bg-indigo-200 rounded-full overflow-hidden">
-                <div className="h-full bg-indigo-600 rounded-full transition-all duration-300"
-                  style={{ width: `${(sendProgress.done / sendProgress.total) * 100}%` }} />
-              </div>
-              <p className="text-xs text-indigo-600 mt-1">{sendProgress.done}/{sendProgress.total} sent</p>
-            </div>
-          )}
-          <div className="flex items-center gap-2 ml-auto">
-            {selectedDrafts.length > 0 ? (
-              <>
-                <button onClick={() => setSelected(new Set())}
-                  className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1">
-                  <X size={11} />Deselect all
-                </button>
-                <button onClick={() => runBatchSend(selectedDrafts)} disabled={sendingBatch}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                  <Send size={13} className={sendingBatch ? 'animate-pulse' : ''} />
-                  Send Selected ({selectedDrafts.length})
-                </button>
-              </>
-            ) : (
-              <button onClick={() => runBatchSend(draftInvoices)} disabled={sendingBatch}
-                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                <Send size={13} className={sendingBatch ? 'animate-pulse' : ''} />
-                Send All Drafts ({draftInvoices.length})
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* ── Invoice Table ── */}
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-4 py-3 w-10">
-                <input type="checkbox"
-                  checked={allDraftsSelected}
-                  onChange={toggleSelectAll}
-                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  title="Select all draft invoices" />
-              </th>
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100">
               <th className="table-header text-left px-4 py-3">Invoice #</th>
               <th className="table-header text-left px-4 py-3">Customer</th>
               <th className="table-header text-left px-4 py-3">Property</th>
@@ -547,12 +483,47 @@ export default function InvoicesPage() {
               <th className="table-header text-right px-4 py-3">Amount</th>
               <th className="table-header text-left px-4 py-3">Due</th>
               <th className="table-header text-center px-4 py-3">Status</th>
-              <th className="px-4 py-3 w-24 text-right">Actions</th>
+              <th className="px-4 py-3 w-20 text-right">Actions</th>
+            </tr>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="px-3 py-2"></th>
+              <th className="px-3 py-2">
+                <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter customer…"
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+              </th>
+              <th className="px-3 py-2">
+                <select value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                  <option value="">All</option>
+                  {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </th>
+              <th className="px-3 py-2"></th>
+              <th className="px-3 py-2"></th>
+              <th className="px-3 py-2"></th>
+              <th className="px-3 py-2">
+                <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                  <option value="">All</option>
+                  <option value="draft">Draft</option>
+                  <option value="sent">Sent</option>
+                  <option value="paid">Paid</option>
+                  <option value="overdue">Overdue</option>
+                </select>
+              </th>
+              <th className="px-3 py-2">
+                {(search || filterBuilding || filterStatus || filterAnomaly) && (
+                  <button onClick={() => { setSearch(''); setFilterBuilding(''); setFilterStatus(''); setFilterAnomaly(false) }}
+                    className="text-xs text-slate-400 hover:text-slate-700 flex items-center gap-0.5 whitespace-nowrap">
+                    <X size={10} />Clear
+                  </button>
+                )}
+              </th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="py-12 text-center text-slate-400">
+              <tr><td colSpan={8} className="py-12 text-center text-slate-400">
                 {monthInvoices.length === 0
                   ? 'No invoices yet — use the panel above to generate them from uploaded readings'
                   : 'No invoices match the current filters'}
@@ -564,15 +535,8 @@ export default function InvoicesPage() {
               const bld     = bldMap.get(inv.buildingId)
               const anomaly = anomalyMap.get(inv.id)
               const sendSt  = sendStatuses[inv.id]
-              const isDraft = inv.status === 'draft' && !inv.isAdjustment
               return (
                 <tr key={inv.id} className={`data-row ${anomaly ? 'border-l-2 border-amber-400' : ''}`}>
-                  <td className="px-4 py-3">
-                    {isDraft && (
-                      <input type="checkbox" checked={selected.has(inv.id)} onChange={() => toggleSelect(inv.id)}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
-                    )}
-                  </td>
                   <td className="px-4 py-3">
                     <Link href={`/electricity/invoices/${inv.id}`} className="text-indigo-600 hover:underline font-mono text-xs font-medium">
                       {inv.invoiceNumber}

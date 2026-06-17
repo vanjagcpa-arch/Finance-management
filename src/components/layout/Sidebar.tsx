@@ -22,7 +22,7 @@ const ELEC_NAV = [
   { href: '/electricity', label: 'Overview', icon: Zap, exact: true },
   { href: '/electricity/summary', label: 'Portfolio Summary', icon: PieChart },
   { href: '/electricity/customers', label: 'Customers', icon: Users },
-  { href: '/electricity/vacant', label: 'Vacant Units', icon: Home },
+  { href: '/electricity/units', label: 'All Units', icon: Home },
   { href: '/electricity/onboard', label: 'Onboard Tenant', icon: UserPlus },
   { href: '/electricity/usage', label: 'Meter Readings', icon: Upload },
   { href: '/electricity/invoices', label: 'Invoices', icon: FileText },
