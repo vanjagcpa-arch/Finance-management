@@ -89,12 +89,10 @@ export default function OnboardPage() {
       const matchedBuilding = buildings.find(b =>
         b.name.toLowerCase() === (p.buildingName ?? '').toLowerCase()
       )
-      const occupiedIds = new Set(customers.filter(c => !c.moveOutDate).map(c => c.apartmentId))
       const matchedApt = matchedBuilding
         ? apartments.find(a =>
             a.buildingId === matchedBuilding.id &&
-            a.unitNumber.toLowerCase() === (p.unitNumber ?? '').toLowerCase() &&
-            !occupiedIds.has(a.id)
+            a.unitNumber.toLowerCase() === (p.unitNumber ?? '').toLowerCase()
           )
         : undefined
 
@@ -124,14 +122,19 @@ export default function OnboardPage() {
     }
   }, [isLoaded, buildings, apartments, customers])
 
-  const occupiedAptIds = useMemo(
-    () => new Set(customers.filter(c => !c.moveOutDate).map(c => c.apartmentId)),
+  const activeAptIds = useMemo(
+    () => new Set(customers.filter(c => !c.moveOutDate && c.moveInDate <= today).map(c => c.apartmentId)),
+    [customers],
+  )
+
+  const incomingAptIds = useMemo(
+    () => new Set(customers.filter(c => !c.moveOutDate && c.moveInDate > today).map(c => c.apartmentId)),
     [customers],
   )
 
   const vacantApts = useMemo(
-    () => apartments.filter(a => !occupiedAptIds.has(a.id)),
-    [apartments, occupiedAptIds],
+    () => apartments.filter(a => !activeAptIds.has(a.id)),
+    [apartments, activeAptIds],
   )
 
   const buildingVacancy = useMemo(() => {
@@ -140,9 +143,17 @@ export default function OnboardPage() {
     return m
   }, [vacantApts])
 
-  const vacantInBuilding = useMemo(
-    () => vacantApts.filter(a => a.buildingId === form.buildingId),
-    [vacantApts, form.buildingId],
+  const buildingAptCount = useMemo(() => {
+    const m = new Map<string, number>()
+    apartments.forEach(a => m.set(a.buildingId, (m.get(a.buildingId) ?? 0) + 1))
+    return m
+  }, [apartments])
+
+  const allInBuilding = useMemo(
+    () => apartments
+      .filter(a => a.buildingId === form.buildingId)
+      .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, undefined, { numeric: true })),
+    [apartments, form.buildingId],
   )
 
   const selectedApt = apartments.find(a => a.id === form.apartmentId)
@@ -184,7 +195,6 @@ export default function OnboardPage() {
   }
 
   function applyExtracted(p: ExtractedCustomer) {
-    const occupiedIds = new Set(customers.filter(c => !c.moveOutDate).map(c => c.apartmentId))
     const matchedBuilding = p.buildingName
       ? buildings.find(b => b.name.toLowerCase().includes(p.buildingName!.toLowerCase()) ||
           p.buildingName!.toLowerCase().includes(b.name.toLowerCase()))
@@ -192,8 +202,7 @@ export default function OnboardPage() {
     const matchedApt = matchedBuilding && p.unitNumber
       ? apartments.find(a =>
           a.buildingId === matchedBuilding.id &&
-          a.unitNumber.toLowerCase() === p.unitNumber!.toLowerCase() &&
-          !occupiedIds.has(a.id)
+          a.unitNumber.toLowerCase() === p.unitNumber!.toLowerCase()
         )
       : undefined
 
@@ -412,7 +421,7 @@ export default function OnboardPage() {
             <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
               <UserPlus size={22} className="text-indigo-600" />Onboard New Tenant
             </h1>
-            <p className="text-slate-500 text-sm mt-0.5">{vacantApts.length} vacant units available</p>
+            <p className="text-slate-500 text-sm mt-0.5">{vacantApts.length} vacant · {apartments.length} total units</p>
           </div>
         </div>
 
@@ -575,7 +584,7 @@ export default function OnboardPage() {
           {/* STEP 1: Select Unit */}
           {step === 'unit' && (
             <div className="space-y-5">
-              <h2 className="text-lg font-semibold text-slate-900">Select a Vacant Unit</h2>
+              <h2 className="text-lg font-semibold text-slate-900">Select a Unit</h2>
 
               {/* Building picker */}
               <div>
@@ -583,17 +592,16 @@ export default function OnboardPage() {
                 <div className="grid grid-cols-2 gap-3">
                   {buildings.map(b => {
                     const vacant = buildingVacancy.get(b.id) ?? 0
+                    const total  = buildingAptCount.get(b.id) ?? 0
                     const sel = form.buildingId === b.id
                     return (
                       <button key={b.id} onClick={() => { sf('buildingId', b.id); sf('apartmentId', '') }}
-                        disabled={vacant === 0}
                         className={`text-left p-4 rounded-xl border-2 transition-all
-                          ${sel ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}
-                          ${vacant === 0 ? 'opacity-40 cursor-not-allowed' : ''}`}>
+                          ${sel ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}>
                         <p className="font-semibold text-slate-900 text-sm">{b.name}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{b.address}</p>
                         <p className={`text-xs font-medium mt-2 ${vacant > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {vacant} vacant unit{vacant !== 1 ? 's' : ''}
+                          {vacant > 0 ? `${vacant} vacant` : 'All occupied'} · {total} total
                         </p>
                       </button>
                     )
@@ -608,14 +616,48 @@ export default function OnboardPage() {
                   <select value={form.apartmentId} onChange={e => sf('apartmentId', e.target.value)}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">— pick a unit —</option>
-                    {vacantInBuilding.map(a => (
-                      <option key={a.id} value={a.id}>
-                        Unit {a.unitNumber} — Level {a.floor} (Meter: {a.meterNumber})
-                      </option>
-                    ))}
+                    {allInBuilding.map(a => {
+                      const isActive   = activeAptIds.has(a.id)
+                      const hasIncoming = incomingAptIds.has(a.id)
+                      const statusLabel = isActive ? ' ⚠ Occupied' : hasIncoming ? ' · Incoming booked' : ' ✓ Vacant'
+                      return (
+                        <option key={a.id} value={a.id}>
+                          Unit {a.unitNumber} — Level {a.floor} (Meter: {a.meterNumber}){statusLabel}
+                        </option>
+                      )
+                    })}
                   </select>
 
-                  {form.apartmentId && selectedApt && (
+                  {/* Occupied unit warning */}
+                  {form.apartmentId && activeAptIds.has(form.apartmentId) && (() => {
+                    const occupant = customers.find(c => c.apartmentId === form.apartmentId && !c.moveOutDate && c.moveInDate <= today)
+                    return occupant ? (
+                      <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                        <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+                          <AlertCircle size={12} />Currently occupied by {occupant.firstName} {occupant.lastName}
+                        </p>
+                        <p className="text-xs text-amber-700 mt-1">
+                          Moved in {occupant.moveInDate}{occupant.vacateRequestDate ? ` · Vacating ${occupant.vacateRequestDate}` : ''}
+                        </p>
+                        <p className="text-xs text-amber-600 mt-1">Set a future move-in date on the next step to schedule the new tenant.</p>
+                      </div>
+                    ) : null
+                  })()}
+
+                  {/* Incoming tenant warning */}
+                  {form.apartmentId && incomingAptIds.has(form.apartmentId) && (() => {
+                    const incoming = customers.find(c => c.apartmentId === form.apartmentId && !c.moveOutDate && c.moveInDate > today)
+                    return incoming ? (
+                      <div className="mt-3 p-3 bg-sky-50 rounded-lg border border-sky-200">
+                        <p className="text-xs font-semibold text-sky-800 flex items-center gap-1.5">
+                          <AlertCircle size={12} />Incoming tenant already scheduled
+                        </p>
+                        <p className="text-xs text-sky-700 mt-1">{incoming.firstName} {incoming.lastName} — from {incoming.moveInDate}</p>
+                      </div>
+                    ) : null
+                  })()}
+
+                  {form.apartmentId && selectedApt && !activeAptIds.has(form.apartmentId) && !incomingAptIds.has(form.apartmentId) && (
                     <div className="mt-3 p-3 bg-indigo-50 rounded-lg border border-indigo-100 text-sm text-indigo-700">
                       <p className="font-semibold">Unit {selectedApt.unitNumber} selected</p>
                       <p className="text-xs text-indigo-500 mt-0.5">Level {selectedApt.floor} · Meter {selectedApt.meterNumber}</p>

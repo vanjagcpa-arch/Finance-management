@@ -39,10 +39,20 @@ export default function InvoicesPage() {
   const custMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
   const bldMap  = useMemo(() => new Map(buildings.map(b => [b.id, b])), [buildings])
 
-  // Customers with active tenancy indexed by apartmentId
+  // Last day of the selected billing month — used to exclude future move-ins
+  const billingPeriodEnd = useMemo(() => {
+    const days = new Date(selectedYear, selectedMonth, 0).getDate()
+    return `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(days).padStart(2, '0')}`
+  }, [selectedYear, selectedMonth])
+
+  // Customers with active tenancy for this billing period (excludes future move-ins)
   const activeCustAptMap = useMemo(
-    () => new Map(customers.filter(c => !c.moveOutDate).map(c => [c.apartmentId, c])),
-    [customers]
+    () => new Map(
+      customers
+        .filter(c => !c.moveOutDate && c.moveInDate <= billingPeriodEnd)
+        .map(c => [c.apartmentId, c])
+    ),
+    [customers, billingPeriodEnd]
   )
 
   // All invoices for selected month (incl adjustments)
