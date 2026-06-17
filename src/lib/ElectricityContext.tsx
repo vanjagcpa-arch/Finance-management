@@ -38,6 +38,8 @@ interface ElectricityStore {
   addBuilding:    (b: Building) => Apartment[]
   updateBuilding: (b: Building) => void
   removeBuilding: (id: string) => void
+  // Apartments
+  updateApartment: (a: Apartment) => void
   // Customers
   addCustomer:    (c: Customer) => void
   updateCustomer: (c: Customer) => void
@@ -45,6 +47,7 @@ interface ElectricityStore {
   offboardCustomer: (customerId: string, moveOutDate: string, finalReading: number) => void
   setVacateRequest: (customerId: string, date: string) => void
   // Data
+  updateReading: (r: MeterReading) => void
   upsertReadings: (r: MeterReading[]) => void
   upsertInvoices: (i: ElectricityInvoice[]) => void
   updateInvoice:  (i: ElectricityInvoice) => void
@@ -141,6 +144,11 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
   const removeBuilding = useCallback((id: string) => {
     setBuildings(prev => { const next = prev.filter(x => x.id !== id); save(KEYS.buildings, next); return next })
     setApartments(prev => { const next = prev.filter(a => a.buildingId !== id); save(KEYS.apartments, next); return next })
+  }, [save])
+
+  // --- Apartments ---
+  const updateApartment = useCallback((a: Apartment) => {
+    setApartments(prev => { const next = prev.map(x => x.id === a.id ? a : x); save(KEYS.apartments, next); return next })
   }, [save])
 
   // --- Customers ---
@@ -243,6 +251,14 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
   }, [save, settings])
 
   // --- Readings & Invoices ---
+  const updateReading = useCallback((r: MeterReading) => {
+    setReadings(prev => {
+      const next = prev.map(x => x.id === r.id ? r : x)
+      save(KEYS.readings, next)
+      return next
+    })
+  }, [save])
+
   const upsertReadings = useCallback((newR: MeterReading[]) => {
     setReadings(prev => {
       const map = new Map(prev.map(r => [r.id, r]))
@@ -319,8 +335,9 @@ export function ElectricityProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={{
       buildings, apartments, customers, readings, invoices, settings, isLoaded,
       addBuilding, updateBuilding, removeBuilding,
+      updateApartment,
       addCustomer, updateCustomer, removeCustomer, offboardCustomer, setVacateRequest,
-      upsertReadings, upsertInvoices, updateInvoice, updateSettings,
+      updateReading, upsertReadings, upsertInvoices, updateInvoice, updateSettings,
       nextInvoiceNumber, resetToDemo,
       debtorComms, debtorStatuses, paymentPlans,
       addDebtorComm, setDebtorStatus, upsertPaymentPlan,

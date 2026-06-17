@@ -9,10 +9,6 @@ export interface Building {
   lowUsageThreshold: number   // kWh/month – below = low (green)
   highUsageThreshold: number  // kWh/month – above = high (amber)
   notes?: string
-  agencyName?: string
-  agentName?: string
-  agentEmail?: string
-  agentPhone?: string
 }
 
 export interface Apartment {
@@ -21,6 +17,10 @@ export interface Apartment {
   unitNumber: string
   floor: number
   meterNumber: string
+  agencyName?: string
+  agentName?: string
+  agentEmail?: string
+  agentPhone?: string
 }
 
 export type PaymentMethod = 'direct_debit' | 'bpay' | 'eft' | 'ezidebit'
@@ -86,6 +86,10 @@ export interface ElectricityInvoice {
   total: number
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
   isFinalBill?: boolean
+  isAdjustment?: boolean
+  adjustmentType?: 'credit' | 'debit_adj'
+  adjustmentReason?: string
+  linkedInvoiceId?: string
   paidDate?: string
   paidAmount?: number
   paymentReference?: string
