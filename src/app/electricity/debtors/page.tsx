@@ -112,6 +112,7 @@ export default function DebtorsPage() {
   const [agingFilter,    setAgingFilter]    = useState('')
   const [search,         setSearch]         = useState('')
   const [expandedId,     setExpandedId]     = useState<string | null>(null)
+  const [expandedComms,  setExpandedComms]  = useState(new Set<string>())
   const [noteInputs,     setNoteInputs]     = useState<Record<string, string>>({})
   const [callInputs,     setCallInputs]     = useState<Record<string, string>>({})
   const [planModal,      setPlanModal]      = useState<DebtorRecord | null>(null)
@@ -636,7 +637,7 @@ export default function DebtorsPage() {
                             <p className="text-xs text-slate-400 italic">No communications logged yet</p>
                           ) : (
                             <div className="space-y-2.5">
-                              {record.comms.slice(0, 10).map(comm => {
+                              {record.comms.slice(0, expandedComms.has(record.invoice.id) ? undefined : 10).map(comm => {
                                 const cfg  = COMM_CFG[comm.type]
                                 const Icon = cfg.icon
                                 return (
@@ -651,7 +652,18 @@ export default function DebtorsPage() {
                                 )
                               })}
                               {record.comms.length > 10 && (
-                                <p className="text-xs text-slate-400">+{record.comms.length - 10} older entries</p>
+                                <button
+                                  onClick={() => setExpandedComms(prev => {
+                                    const next = new Set(prev)
+                                    if (next.has(record.invoice.id)) next.delete(record.invoice.id)
+                                    else next.add(record.invoice.id)
+                                    return next
+                                  })}
+                                  className="text-xs text-indigo-600 hover:underline mt-1">
+                                  {expandedComms.has(record.invoice.id)
+                                    ? 'Show less'
+                                    : `Show all ${record.comms.length} entries`}
+                                </button>
                               )}
                             </div>
                           )}

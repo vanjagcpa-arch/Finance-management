@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Settings, Building2, Zap, CreditCard, Save, Plus, Edit2, Trash2, X, Check, AlertCircle, Link2, RefreshCw, Users, FileText, ChevronRight, Loader2, Unlink, ExternalLink, Shield, Eye, EyeOff, KeyRound, UserCog } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { generateApartmentsForBuilding } from '@/lib/electricityData'
@@ -112,6 +112,21 @@ export default function SettingsPage() {
   // Sync form when settings load
   useEffect(() => { if (isLoaded) setForm(settings) }, [isLoaded, settings])
 
+  const formErrors = useMemo(() => {
+    const errors: Record<string, string> = {}
+    if (!form.companyName.trim()) errors.companyName = 'Company name is required'
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errors.email = 'Invalid email address'
+    if (form.senderEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.senderEmail)) errors.senderEmail = 'Invalid email address'
+    if (!form.paymentTermsDays || form.paymentTermsDays < 1) errors.paymentTermsDays = 'Must be at least 1 day'
+    if (!form.tariff.ratePerKwh || form.tariff.ratePerKwh <= 0) errors.ratePerKwh = 'Must be greater than 0'
+    if (form.tariff.dailySupplyCharge < 0) errors.dailySupplyCharge = 'Must be 0 or greater'
+    if (form.tariff.gstRate < 0 || form.tariff.gstRate > 1) errors.gstRate = 'Must be between 0 and 1'
+    return errors
+  }, [form])
+
+  const companyTabHasErrors = !!(formErrors.companyName || formErrors.email || formErrors.senderEmail || formErrors.paymentTermsDays)
+  const tariffTabHasErrors  = !!(formErrors.ratePerKwh || formErrors.dailySupplyCharge || formErrors.gstRate)
+
   function showToast(msg: string, type: 'success' | 'error' = 'success') {
     setToastType(type)
     setToast(msg)
@@ -168,12 +183,14 @@ export default function SettingsPage() {
 
   function field(key: keyof ElectricitySettings, label: string, type = 'text', placeholder?: string) {
     const val = form[key]
+    const err = formErrors[key]
     return (
       <div key={key}>
         <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
         <input type={type} value={String(val ?? '')} placeholder={placeholder}
           onChange={e => sf(key, type === 'number' ? parseFloat(e.target.value) : e.target.value)}
-          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${err ? 'border-red-300 focus:ring-red-400' : 'border-slate-200 focus:ring-indigo-500'}`} />
+        {err && <p className="flex items-center gap-1 mt-1 text-xs text-red-600"><AlertCircle size={11} />{err}</p>}
       </div>
     )
   }
@@ -467,8 +484,8 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="flex justify-end">
-            <button onClick={handleSave}
-              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+            <button onClick={handleSave} disabled={companyTabHasErrors}
+              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors">
               <Save size={14} />{saved ? 'Saved!' : 'Save Changes'}
             </button>
           </div>
@@ -557,15 +574,19 @@ export default function SettingsPage() {
                 { key: 'ratePerKwh',        label: 'Rate ($/kWh)', placeholder: '0.3276' },
                 { key: 'dailySupplyCharge', label: 'Daily Supply Charge ($/day)', placeholder: '1.1524' },
                 { key: 'gstRate',           label: 'GST Rate (e.g. 0.10 = 10%)', placeholder: '0.10' },
-              ].map(({ key, label, placeholder }) => (
-                <div key={key}>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
-                  <input type="number" step="0.0001" placeholder={placeholder}
-                    value={String(form.tariff[key as keyof typeof form.tariff])}
-                    onChange={e => setForm(f => ({ ...f, tariff: { ...f.tariff, [key]: parseFloat(e.target.value) } }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-              ))}
+              ].map(({ key, label, placeholder }) => {
+                const err = formErrors[key]
+                return (
+                  <div key={key}>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                    <input type="number" step="0.0001" placeholder={placeholder}
+                      value={String(form.tariff[key as keyof typeof form.tariff])}
+                      onChange={e => setForm(f => ({ ...f, tariff: { ...f.tariff, [key]: parseFloat(e.target.value) } }))}
+                      className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 ${err ? 'border-red-300 focus:ring-red-400' : 'border-slate-200 focus:ring-indigo-500'}`} />
+                    {err && <p className="flex items-center gap-1 mt-1 text-xs text-red-600"><AlertCircle size={11} />{err}</p>}
+                  </div>
+                )
+              })}
             </div>
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
@@ -573,8 +594,8 @@ export default function SettingsPage() {
             <p className="text-xs text-amber-700">Changing tariff rates only affects new invoices generated after saving. Existing invoices are not recalculated.</p>
           </div>
           <div className="flex justify-end">
-            <button onClick={handleSave}
-              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700">
+            <button onClick={handleSave} disabled={tariffTabHasErrors}
+              className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
               <Save size={14} />{saved ? 'Saved!' : 'Save Tariff'}
             </button>
           </div>
