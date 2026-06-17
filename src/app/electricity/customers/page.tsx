@@ -9,6 +9,8 @@ import { useElectricity } from '@/lib/ElectricityContext'
 import type { Customer, PaymentMethod } from '@/lib/electricityTypes'
 import { formatAUD, calculateProRataBill } from '@/lib/electricityUtils'
 
+const today = new Date().toISOString().split('T')[0]
+
 const EMPTY: Omit<Customer, 'id'> = {
   apartmentId: '', firstName: '', lastName: '', email: '', phone: '',
   moveInDate: new Date().toISOString().split('T')[0],
@@ -26,7 +28,7 @@ export default function CustomersPage() {
   const [filterBld,      setFilterBld]      = useState('')
   const [filterContact,  setFilterContact]  = useState('')
   const [filterPayment,  setFilterPayment]  = useState('')
-  const [showActive,     setShowActive]     = useState<'active' | 'all' | 'moved'>('active')
+  const [showActive,     setShowActive]     = useState<'active' | 'all' | 'moved' | 'incoming'>('active')
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editing,    setEditing]    = useState<Customer | null>(null)
   const [form,       setForm]       = useState<Omit<Customer,'id'>>(EMPTY)
@@ -103,15 +105,21 @@ export default function CustomersPage() {
     const matchContact = !filterContact || `${c.email} ${c.phone}`.toLowerCase().includes(filterContact.toLowerCase())
     const matchBld     = !filterBld     || apt?.buildingId === filterBld
     const matchPayment = !filterPayment || c.paymentMethod === filterPayment
-    const matchActive  = showActive === 'all' ? true : showActive === 'active' ? !c.moveOutDate : !!c.moveOutDate
+    const matchActive  = showActive === 'all' ? true
+      : showActive === 'active'   ? (!c.moveOutDate && c.moveInDate <= today)
+      : showActive === 'incoming' ? (!c.moveOutDate && c.moveInDate > today)
+      : !!c.moveOutDate
     return matchName && matchContact && matchBld && matchPayment && matchActive
   }), [customers, search, filterContact, filterBld, filterPayment, showActive, aptMap])
 
   const occupiedAptIds = useMemo(() =>
-    new Set(customers.filter(c => c.id !== editing?.id && !c.moveOutDate).map(c => c.apartmentId)),
+    new Set(customers.filter(c => c.id !== editing?.id && !c.moveOutDate && c.moveInDate <= today).map(c => c.apartmentId)),
     [customers, editing]
   )
-  const availableApts = apartments.filter(a => !occupiedAptIds.has(a.id))
+  const incomingAptIds = useMemo(() =>
+    new Set(customers.filter(c => c.id !== editing?.id && !c.moveOutDate && c.moveInDate > today).map(c => c.apartmentId)),
+    [customers, editing]
+  )
 
   function openAdd() { setEditing(null); setForm({ ...EMPTY }); setModalOpen(true) }
   function openEdit(c: Customer) { setEditing(c); setForm({ ...c }); setModalOpen(true) }
@@ -218,8 +226,9 @@ export default function CustomersPage() {
 
   if (!isLoaded) return <div className="flex-1 flex items-center justify-center"><div className="text-slate-400">Loading…</div></div>
 
-  const activeCount       = customers.filter(c => !c.moveOutDate).length
-  const movedCount        = customers.filter(c => !!c.moveOutDate).length
+  const activeCount        = customers.filter(c => !c.moveOutDate && c.moveInDate <= today).length
+  const incomingCount      = customers.filter(c => !c.moveOutDate && c.moveInDate > today).length
+  const movedCount         = customers.filter(c => !!c.moveOutDate).length
   const pendingVacateCount = customers.filter(c => c.vacateRequestDate && !c.moveOutDate).length
 
   return (
@@ -231,7 +240,9 @@ export default function CustomersPage() {
             <Users size={22} className="text-indigo-600" />Customers
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            {activeCount} active · {movedCount} moved out
+            {activeCount} active
+            {incomingCount > 0 && <span className="text-sky-600 font-medium"> · {incomingCount} incoming</span>}
+            {' · '}{movedCount} moved out
             {pendingVacateCount > 0 && (
               <span className="text-amber-600 font-medium"> · {pendingVacateCount} pending vacate</span>
             )}
@@ -303,6 +314,7 @@ export default function CustomersPage() {
                 <select value={showActive} onChange={e => setShowActive(e.target.value as typeof showActive)}
                   className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
                   <option value="active">Active</option>
+                  <option value="incoming">Incoming</option>
                   <option value="all">All</option>
                   <option value="moved">Moved out</option>
                 </select>
@@ -317,21 +329,24 @@ export default function CustomersPage() {
             {filtered.map(c => {
               const apt = aptMap.get(c.apartmentId)
               const bld = apt ? bldMap.get(apt.buildingId) : undefined
-              const movedOut     = !!c.moveOutDate
-              const pendingVacate = !!c.vacateRequestDate && !movedOut
+              const movedOut      = !!c.moveOutDate
+              const isIncoming    = !c.moveOutDate && c.moveInDate > today
+              const pendingVacate = !!c.vacateRequestDate && !movedOut && !isIncoming
               return (
-                <tr key={c.id} className={`data-row ${movedOut ? 'opacity-60' : ''}`}>
+                <tr key={c.id} className={`data-row ${movedOut ? 'opacity-60' : isIncoming ? 'opacity-85' : ''}`}>
                   {/* Customer */}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0
-                        ${movedOut ? 'bg-slate-100 text-slate-400' : pendingVacate ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                        ${movedOut ? 'bg-slate-100 text-slate-400' : isIncoming ? 'bg-sky-100 text-sky-700' : pendingVacate ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700'}`}>
                         {c.firstName[0]}{c.lastName[0]}
                       </div>
                       <div>
                         <p className="font-medium text-slate-800">{c.firstName} {c.lastName}</p>
                         {movedOut
                           ? <p className="text-xs text-red-500">Moved out {c.moveOutDate}</p>
+                          : isIncoming
+                          ? <p className="text-xs text-sky-500">From {c.moveInDate}</p>
                           : <p className="text-xs text-slate-400">Since {c.moveInDate}</p>}
                       </div>
                     </div>
@@ -372,10 +387,17 @@ export default function CustomersPage() {
                       <span className="font-mono text-xs text-slate-300 bg-slate-50 px-1 py-0.5 rounded">{c.myobCardId}</span>
                     )}
                   </td>
-                  {/* Vacate Date */}
+                  {/* Status */}
                   <td className="px-4 py-3 min-w-[140px]">
                     {movedOut ? (
                       <span className="text-xs text-slate-400">Moved out</span>
+                    ) : isIncoming ? (
+                      <div className="space-y-1">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-700">
+                          <Calendar size={10} />Incoming
+                        </span>
+                        <p className="text-xs text-sky-600">Moves in {c.moveInDate}</p>
+                      </div>
                     ) : pendingVacate ? (
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-1">
@@ -398,7 +420,7 @@ export default function CustomersPage() {
                         className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors">
                         <Edit2 size={11} />Edit
                       </button>
-                      {!movedOut && (
+                      {!movedOut && !isIncoming && (
                         <button onClick={() => openFinalize(c)}
                           className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Finalize vacate">
                           <LogOut size={13} />
@@ -447,10 +469,14 @@ export default function CustomersPage() {
                     <option value="">Select apartment…</option>
                     {buildings.map(b => (
                       <optgroup key={b.id} label={b.name}>
-                        {(editing?.apartmentId
-                          ? [apartments.find(a => a.id === editing.apartmentId), ...availableApts.filter(a => a.buildingId === b.id)].filter(Boolean)
-                          : availableApts.filter(a => a.buildingId === b.id)
-                        ).map(a => a && <option key={a.id} value={a.id}>Unit {a.unitNumber} – Level {a.floor} (Meter: {a.meterNumber})</option>)}
+                        {apartments.filter(a => a.buildingId === b.id).map(a => {
+                          const isCurrOcc = occupiedAptIds.has(a.id)
+                          const hasIncom  = incomingAptIds.has(a.id)
+                          const occupant  = isCurrOcc ? customers.find(c => c.apartmentId === a.id && !c.moveOutDate && c.moveInDate <= today && c.id !== editing?.id) : null
+                          const incoming  = hasIncom  ? customers.find(c => c.apartmentId === a.id && !c.moveOutDate && c.moveInDate > today  && c.id !== editing?.id) : null
+                          const suffix = occupant ? ` ⚠ ${occupant.firstName} ${occupant.lastName}` : hasIncom && incoming ? ` · Incoming: ${incoming.firstName} ${incoming.lastName}` : ''
+                          return <option key={a.id} value={a.id}>Unit {a.unitNumber} – L{a.floor} (Meter: {a.meterNumber}){suffix}</option>
+                        })}
                       </optgroup>
                     ))}
                   </select>

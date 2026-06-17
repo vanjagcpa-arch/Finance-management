@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   Home, Building2, X, Edit2, Save, Mail, Phone, Users,
-  Send, Check, AlertTriangle, Zap,
+  Send, Check, AlertTriangle, Zap, Calendar,
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { monthName } from '@/lib/electricityUtils'
@@ -18,7 +18,7 @@ export default function AllUnitsPage() {
   const [filterUnit,   setFilterUnit]   = useState('')
   const [filterFloor,  setFilterFloor]  = useState('')
   const [filterMeter,  setFilterMeter]  = useState('')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'occupied' | 'vacant'>('all')
+  const [filterStatus, setFilterStatus] = useState<'all' | 'occupied' | 'vacant' | 'incoming'>('all')
   const [filterTenant, setFilterTenant] = useState('')
   const [filterAgency, setFilterAgency] = useState('')
 
@@ -27,8 +27,15 @@ export default function AllUnitsPage() {
   const [sending,      setSending]      = useState<string | null>(null)
   const [sent,         setSent]         = useState<string[]>([])
 
+  const today = new Date().toISOString().split('T')[0]
+
   const activeCustMap = useMemo(
-    () => new Map(customers.filter(c => !c.moveOutDate).map(c => [c.apartmentId, c])),
+    () => new Map(customers.filter(c => !c.moveOutDate && c.moveInDate <= today).map(c => [c.apartmentId, c])),
+    [customers]
+  )
+
+  const incomingCustMap = useMemo(
+    () => new Map(customers.filter(c => !c.moveOutDate && c.moveInDate > today).map(c => [c.apartmentId, c])),
     [customers]
   )
 
@@ -48,9 +55,10 @@ export default function AllUnitsPage() {
       .map(apt => {
         const building = buildings.find(b => b.id === apt.buildingId)
         if (!building) return null
-        const customer     = activeCustMap.get(apt.id) ?? null
-        const latestReading = latestReadingMap.get(apt.id) ?? null
-        return { apt, building, customer, latestReading }
+        const customer         = activeCustMap.get(apt.id) ?? null
+        const incomingCustomer = incomingCustMap.get(apt.id) ?? null
+        const latestReading    = latestReadingMap.get(apt.id) ?? null
+        return { apt, building, customer, incomingCustomer, latestReading }
       })
       .filter((r): r is NonNullable<typeof r> => r !== null)
       .sort((a, b) => {
@@ -65,10 +73,12 @@ export default function AllUnitsPage() {
     if (filterFloor  && !String(r.apt.floor).includes(filterFloor)) return false
     if (filterMeter  && !r.apt.meterNumber.toLowerCase().includes(filterMeter.toLowerCase())) return false
     if (filterStatus === 'occupied' && !r.customer) return false
-    if (filterStatus === 'vacant'   &&  r.customer) return false
+    if (filterStatus === 'vacant'   && (r.customer || r.incomingCustomer)) return false
+    if (filterStatus === 'incoming' && !r.incomingCustomer) return false
     if (filterTenant) {
-      const name = r.customer ? `${r.customer.firstName} ${r.customer.lastName}`.toLowerCase() : ''
-      if (!name.includes(filterTenant.toLowerCase())) return false
+      const currName = r.customer ? `${r.customer.firstName} ${r.customer.lastName}`.toLowerCase() : ''
+      const incomName = r.incomingCustomer ? `${r.incomingCustomer.firstName} ${r.incomingCustomer.lastName}`.toLowerCase() : ''
+      if (!currName.includes(filterTenant.toLowerCase()) && !incomName.includes(filterTenant.toLowerCase())) return false
     }
     if (filterAgency) {
       const ag = `${r.apt.agencyName ?? ''} ${r.apt.agentName ?? ''}`.toLowerCase()
@@ -78,7 +88,8 @@ export default function AllUnitsPage() {
   }), [rows, filterBld, filterUnit, filterFloor, filterMeter, filterStatus, filterTenant, filterAgency])
 
   const occupiedCount   = rows.filter(r =>  r.customer).length
-  const vacantCount     = rows.filter(r => !r.customer).length
+  const incomingCount   = rows.filter(r =>  r.incomingCustomer).length
+  const vacantCount     = rows.filter(r => !r.customer && !r.incomingCustomer).length
   const vacantWithUsage = rows.filter(r => !r.customer && r.latestReading && r.latestReading.usage > 0).length
 
   const hasFilters = !!(filterBld || filterUnit || filterFloor || filterMeter || filterStatus !== 'all' || filterTenant || filterAgency)
@@ -137,8 +148,10 @@ export default function AllUnitsPage() {
               <Home size={22} className="text-indigo-600" />All Units
             </h1>
             <p className="text-slate-500 text-sm mt-0.5">
-              {occupiedCount} occupied · {vacantCount} vacant
-              {vacantWithUsage > 0 && <span className="text-amber-600 font-medium"> · {vacantWithUsage} vacant with usage</span>}
+              {occupiedCount} occupied
+              {incomingCount > 0 && <span className="text-sky-600 font-medium"> · {incomingCount} incoming</span>}
+              {' · '}{vacantCount} vacant
+              {vacantWithUsage > 0 && <span className="text-amber-600 font-medium"> · {vacantWithUsage} with usage</span>}
             </p>
           </div>
           {hasFilters && (
@@ -150,11 +163,12 @@ export default function AllUnitsPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           {[
             { label: 'Total Units', val: rows.length, sub: 'in portfolio', status: 'all' as const, color: 'text-slate-900', accent: '' },
             { label: 'Occupied', val: occupiedCount, sub: 'active tenants', status: 'occupied' as const, color: 'text-indigo-700', accent: '' },
-            { label: 'Vacant', val: vacantCount, sub: vacantWithUsage > 0 ? `${vacantWithUsage} with usage` : 'no active tenant', status: 'vacant' as const, color: 'text-amber-600', accent: vacantWithUsage > 0 ? 'border-l-4 border-amber-400' : '' },
+            { label: 'Incoming', val: incomingCount, sub: 'future move-ins', status: 'incoming' as const, color: 'text-sky-600', accent: incomingCount > 0 ? 'border-l-4 border-sky-400' : '' },
+            { label: 'Vacant', val: vacantCount, sub: vacantWithUsage > 0 ? `${vacantWithUsage} with usage` : 'no upcoming tenant', status: 'vacant' as const, color: 'text-amber-600', accent: vacantWithUsage > 0 ? 'border-l-4 border-amber-400' : '' },
           ].map(s => (
             <div key={s.status}
               onClick={() => setFilterStatus(filterStatus === s.status ? 'all' : s.status)}
@@ -207,6 +221,7 @@ export default function AllUnitsPage() {
                     className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
                     <option value="all">All</option>
                     <option value="occupied">Occupied</option>
+                    <option value="incoming">Incoming</option>
                     <option value="vacant">Vacant</option>
                   </select>
                 </th>
@@ -231,9 +246,9 @@ export default function AllUnitsPage() {
                   </td>
                 </tr>
               )}
-              {filtered.map(({ apt, building, customer, latestReading }) => {
-                const isVacant    = !customer
-                const hasUsage    = isVacant && !!latestReading && latestReading.usage > 0
+              {filtered.map(({ apt, building, customer, incomingCustomer, latestReading }) => {
+                const isVacant    = !customer && !incomingCustomer
+                const hasUsage    = !customer && !!latestReading && latestReading.usage > 0
                 const isEditing   = editingAgent === apt.id
                 const isSent      = sent.includes(apt.id)
                 const isSending   = sending === apt.id
@@ -261,8 +276,19 @@ export default function AllUnitsPage() {
                       {/* Status */}
                       <td className="px-4 py-3">
                         {customer ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
-                            <Users size={10} />Occupied
+                          <div>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700">
+                              <Users size={10} />Occupied
+                            </span>
+                            {incomingCustomer && (
+                              <p className="text-xs text-sky-600 mt-0.5 flex items-center gap-0.5">
+                                <Calendar size={9} />Incoming from {incomingCustomer.moveInDate}
+                              </p>
+                            )}
+                          </div>
+                        ) : incomingCustomer ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-700">
+                            <Calendar size={10} />Incoming
                           </span>
                         ) : (
                           <div>
@@ -286,6 +312,23 @@ export default function AllUnitsPage() {
                               {customer.firstName} {customer.lastName}
                             </Link>
                             <p className="text-xs text-slate-400">Since {customer.moveInDate}</p>
+                            {incomingCustomer && (
+                              <p className="text-xs text-sky-600 mt-1 flex items-center gap-0.5">
+                                <Calendar size={9} />
+                                <Link href="/electricity/customers" className="hover:underline">
+                                  {incomingCustomer.firstName} {incomingCustomer.lastName}
+                                </Link>
+                                {' '}from {incomingCustomer.moveInDate}
+                              </p>
+                            )}
+                          </div>
+                        ) : incomingCustomer ? (
+                          <div>
+                            <Link href="/electricity/customers"
+                              className="font-medium text-sky-700 hover:text-sky-800 transition-colors">
+                              {incomingCustomer.firstName} {incomingCustomer.lastName}
+                            </Link>
+                            <p className="text-xs text-sky-500">From {incomingCustomer.moveInDate}</p>
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 italic">—</span>
@@ -330,7 +373,7 @@ export default function AllUnitsPage() {
                               </span>
                             ) : (
                               <button
-                                onClick={() => handleEmailAgent({ apt, building, customer, latestReading })}
+                                onClick={() => handleEmailAgent({ apt, building, customer, incomingCustomer, latestReading })}
                                 disabled={!apt.agentEmail || isSending}
                                 title={!apt.agentEmail ? 'Add agent email first' : 'Email managing agent about usage'}
                                 className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
