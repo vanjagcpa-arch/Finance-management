@@ -22,9 +22,11 @@ export default function CustomersPage() {
     addCustomer, updateCustomer, removeCustomer, offboardCustomer, setVacateRequest, isLoaded,
   } = useElectricity()
 
-  const [search,     setSearch]     = useState('')
-  const [filterBld,  setFilterBld]  = useState('')
-  const [showActive, setShowActive] = useState<'active' | 'all' | 'moved'>('active')
+  const [search,         setSearch]         = useState('')
+  const [filterBld,      setFilterBld]      = useState('')
+  const [filterContact,  setFilterContact]  = useState('')
+  const [filterPayment,  setFilterPayment]  = useState('')
+  const [showActive,     setShowActive]     = useState<'active' | 'all' | 'moved'>('active')
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editing,    setEditing]    = useState<Customer | null>(null)
   const [form,       setForm]       = useState<Omit<Customer,'id'>>(EMPTY)
@@ -97,11 +99,13 @@ export default function CustomersPage() {
 
   const filtered = useMemo(() => customers.filter(c => {
     const apt = aptMap.get(c.apartmentId)
-    const matchSearch = !search || `${c.firstName} ${c.lastName} ${c.email} ${c.phone}`.toLowerCase().includes(search.toLowerCase())
-    const matchBld    = !filterBld || apt?.buildingId === filterBld
-    const matchActive = showActive === 'all' ? true : showActive === 'active' ? !c.moveOutDate : !!c.moveOutDate
-    return matchSearch && matchBld && matchActive
-  }), [customers, search, filterBld, showActive, aptMap])
+    const matchName    = !search        || `${c.firstName} ${c.lastName}`.toLowerCase().includes(search.toLowerCase())
+    const matchContact = !filterContact || `${c.email} ${c.phone}`.toLowerCase().includes(filterContact.toLowerCase())
+    const matchBld     = !filterBld     || apt?.buildingId === filterBld
+    const matchPayment = !filterPayment || c.paymentMethod === filterPayment
+    const matchActive  = showActive === 'all' ? true : showActive === 'active' ? !c.moveOutDate : !!c.moveOutDate
+    return matchName && matchContact && matchBld && matchPayment && matchActive
+  }), [customers, search, filterContact, filterBld, filterPayment, showActive, aptMap])
 
   const occupiedAptIds = useMemo(() =>
     new Set(customers.filter(c => c.id !== editing?.id && !c.moveOutDate).map(c => c.apartmentId)),
@@ -243,46 +247,67 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, phone…"
-            className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-        </div>
-        <select value={filterBld} onChange={e => setFilterBld(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
-          <option value="">All Buildings</option>
-          {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-        <div className="flex bg-slate-100 rounded-lg p-0.5 gap-0.5">
-          {[['active','Active'],['all','All'],['moved','Moved Out']].map(([val,lbl]) => (
-            <button key={val} onClick={() => setShowActive(val as typeof showActive)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors
-                ${showActive === val ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-              {lbl}
-            </button>
-          ))}
-        </div>
-        {(search || filterBld) && (
-          <button onClick={() => { setSearch(''); setFilterBld('') }}
-            className="flex items-center gap-1 px-3 py-2 text-sm text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">
-            <X size={13} />Clear
+      {/* Filter count + clear */}
+      {(search || filterContact || filterBld || filterPayment || showActive !== 'active') && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
+          <button onClick={() => { setSearch(''); setFilterContact(''); setFilterBld(''); setFilterPayment(''); setShowActive('active') }}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50">
+            <X size={11} />Clear filters
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Table — overflow-x-auto so columns never clip */}
       <div className="card overflow-x-auto">
         <table className="w-full text-sm min-w-[900px]">
-          <thead className="bg-slate-50 border-b border-slate-200">
-            <tr>
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-100">
               <th className="table-header text-left px-4 py-3">Customer</th>
               <th className="table-header text-left px-4 py-3">Contact</th>
               <th className="table-header text-left px-4 py-3">Property</th>
               <th className="table-header text-left px-4 py-3">Banking</th>
-              <th className="table-header text-left px-4 py-3">Vacate Date</th>
+              <th className="table-header text-left px-4 py-3">Status</th>
               <th className="px-4 py-3"></th>
+            </tr>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="px-3 py-2">
+                <div className="relative">
+                  <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter name…"
+                    className="w-full pl-6 pr-2 py-1 border border-slate-200 rounded text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                </div>
+              </th>
+              <th className="px-3 py-2">
+                <input value={filterContact} onChange={e => setFilterContact(e.target.value)} placeholder="Filter email / phone…"
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+              </th>
+              <th className="px-3 py-2">
+                <select value={filterBld} onChange={e => setFilterBld(e.target.value)}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                  <option value="">All buildings</option>
+                  {buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </th>
+              <th className="px-3 py-2">
+                <select value={filterPayment} onChange={e => setFilterPayment(e.target.value)}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                  <option value="">All methods</option>
+                  <option value="direct_debit">DDR</option>
+                  <option value="ezidebit">Ezidebit</option>
+                  <option value="bpay">BPAY</option>
+                  <option value="eft">EFT</option>
+                </select>
+              </th>
+              <th className="px-3 py-2">
+                <select value={showActive} onChange={e => setShowActive(e.target.value as typeof showActive)}
+                  className="w-full border border-slate-200 rounded px-2 py-1 text-xs font-normal focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white">
+                  <option value="active">Active</option>
+                  <option value="all">All</option>
+                  <option value="moved">Moved out</option>
+                </select>
+              </th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -468,7 +493,7 @@ export default function CustomersPage() {
                     ) : (
                       <p className="text-xs text-slate-400">No agent assigned</p>
                     )}
-                    <Link href="/electricity/vacant" className="text-xs text-indigo-600 hover:underline mt-2 inline-block">Edit on Vacant Units page →</Link>
+                    <Link href="/electricity/units" className="text-xs text-indigo-600 hover:underline mt-2 inline-block">Edit on All Units page →</Link>
                   </div>
                 )
               })()}
