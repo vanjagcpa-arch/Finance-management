@@ -242,7 +242,8 @@ export async function POST(req: NextRequest) {
       : []
 
     const { data, error } = await resend.emails.send({
-      from: `${payload.companyName} <${payload.fromEmail}>`,
+      from: `${payload.companyName} <onboarding@resend.dev>`,
+      replyTo: payload.fromEmail,
       to:   [payload.to],
       subject: `${payload.isFinalBill ? 'Final Electricity Bill' : 'Electricity Invoice'} ${payload.invoiceNumber} — ${payload.period}`,
       html: buildEmail(payload),

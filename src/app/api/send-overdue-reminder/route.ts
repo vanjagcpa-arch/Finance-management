@@ -114,7 +114,8 @@ export async function POST(req: NextRequest) {
     const p: OverdueReminderPayload = await req.json()
     const urgency = p.daysPastDue >= 14 ? 'FINAL NOTICE' : 'Payment Reminder'
     const result = await resend.emails.send({
-      from: `${p.companyName} <${p.fromEmail}>`,
+      from: `${p.companyName} <onboarding@resend.dev>`,
+      replyTo: p.fromEmail,
       to: [p.to],
       subject: `${urgency}: Invoice ${p.invoiceNumber} — ${p.total.toLocaleString('en-AU', { style: 'currency', currency: 'AUD' })} overdue`,
       html: buildReminderEmail(p),
