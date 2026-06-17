@@ -314,6 +314,115 @@ export function detectUsageAnomalies(
   return anomalies.sort((a, b) => Math.abs(b.pctDiff) - Math.abs(a.pctDiff))
 }
 
+// ── Customer ledger / balance ─────────────────────────────────────────────────
+
+export interface LedgerEntry {
+  date: string
+  type: 'invoice' | 'payment' | 'credit' | 'adjustment'
+  description: string
+  invoiceNumber: string
+  invoiceId: string
+  debit: number
+  credit: number
+  balance: number
+}
+
+export interface CustomerBalance {
+  customerId: string
+  totalBilled: number
+  totalPaid: number
+  totalOutstanding: number
+  totalCredits: number
+  balance: number
+  current: number
+  days30: number
+  days60: number
+  days90plus: number
+}
+
+export function getCustomerBalance(
+  invoices: ElectricityInvoice[],
+  customerId: string,
+  asOfDate?: string,
+): CustomerBalance {
+  const today = asOfDate ?? new Date().toISOString().split('T')[0]
+  const custInvs = invoices.filter(i => i.customerId === customerId && i.status !== 'cancelled')
+  let totalBilled = 0, totalPaid = 0, totalOutstanding = 0, totalCredits = 0
+  let current = 0, days30 = 0, days60 = 0, days90plus = 0
+  for (const inv of custInvs) {
+    if (inv.isAdjustment && inv.adjustmentType === 'credit' && inv.total < 0) {
+      totalCredits += Math.abs(inv.total)
+    } else {
+      if (inv.status !== 'cancelled') totalBilled += inv.total
+      if (inv.status === 'paid') totalPaid += inv.total
+      if (inv.status === 'sent' || inv.status === 'overdue') {
+        totalOutstanding += inv.total
+        const msOverdue = new Date(today).getTime() - new Date(inv.dueDate + 'T00:00:00').getTime()
+        const daysOverdue = Math.floor(msOverdue / 86400000)
+        if (daysOverdue <= 0) current += inv.total
+        else if (daysOverdue <= 30) days30 += inv.total
+        else if (daysOverdue <= 60) days60 += inv.total
+        else days90plus += inv.total
+      }
+    }
+  }
+  return {
+    customerId, totalBilled, totalPaid, totalOutstanding, totalCredits,
+    balance: totalOutstanding - totalCredits,
+    current, days30, days60, days90plus,
+  }
+}
+
+export function buildCustomerLedger(invoices: ElectricityInvoice[], customerId: string): LedgerEntry[] {
+  const custInvs = invoices
+    .filter(i => i.customerId === customerId && i.status !== 'cancelled')
+    .sort((a, b) => a.issueDate.localeCompare(b.issueDate))
+
+  type RawEntry = { date: string; order: number } & Omit<LedgerEntry, 'balance'>
+  const raw: RawEntry[] = []
+
+  for (const inv of custInvs) {
+    const isCredit = inv.isAdjustment && inv.adjustmentType === 'credit' && inv.total < 0
+    if (isCredit) {
+      raw.push({
+        date: inv.issueDate, order: 0,
+        type: 'credit',
+        description: inv.adjustmentReason ? `Credit Note — ${inv.adjustmentReason}` : 'Credit Note',
+        invoiceNumber: inv.invoiceNumber, invoiceId: inv.id,
+        debit: 0, credit: Math.abs(inv.total),
+      })
+    } else {
+      const monthLabel = new Date(inv.billingPeriodStart + 'T00:00:00').toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+      raw.push({
+        date: inv.issueDate, order: 0,
+        type: inv.isAdjustment ? 'adjustment' : 'invoice',
+        description: inv.isAdjustment
+          ? `Debit Adjustment${inv.adjustmentReason ? ' — ' + inv.adjustmentReason : ''}`
+          : inv.isFinalBill ? `Final Bill — ${monthLabel}` : `Invoice — ${monthLabel}`,
+        invoiceNumber: inv.invoiceNumber, invoiceId: inv.id,
+        debit: inv.total, credit: 0,
+      })
+      if (inv.status === 'paid' && inv.paidDate) {
+        raw.push({
+          date: inv.paidDate, order: 1,
+          type: 'payment',
+          description: `Payment received`,
+          invoiceNumber: inv.invoiceNumber, invoiceId: inv.id,
+          debit: 0, credit: inv.paidAmount ?? inv.total,
+        })
+      }
+    }
+  }
+
+  raw.sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order)
+
+  let bal = 0
+  return raw.map(({ order: _order, ...e }) => {
+    bal += e.debit - e.credit
+    return { ...e, balance: bal }
+  })
+}
+
 export function downloadFile(content: string | Blob, filename: string, mimeType = 'text/plain') {
   const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType })
   const url = URL.createObjectURL(blob)

@@ -12,6 +12,7 @@ import {
   generateABAFileFromTransactions, generateMYOBDDRReceipts,
   generateMYOBCustomerExport, generateMYOBInvoiceExport, generateMYOBReceiptsExport,
   generateEzidebitPaymentBatch, generateEzidebitCustomerRegistration,
+  getCustomerBalance,
   downloadFile,
 } from '@/lib/electricityUtils'
 import type { ABATransaction } from '@/lib/electricityUtils'
@@ -54,6 +55,7 @@ export default function ExportsPage() {
   const [filterBld, setFilterBld] = useState('')
   const [rows, setRows] = useState<ABARow[]>([])
   const [rowsInit, setRowsInit] = useState(false)
+  const [balanceMode, setBalanceMode] = useState(false)
 
   // ── MYOB state ─────────────────────────────────────────────────────────────
   const [myobMonth, setMyobMonth] = useState(() => new Date().getMonth() + 1)
@@ -73,13 +75,13 @@ export default function ExportsPage() {
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 3500) }
 
-  // ── Build rows when month changes ──────────────────────────────────────────
+  // ── Build rows (per-invoice mode) ─────────────────────────────────────────
   const buildRows = useCallback((month: number, year: number) => {
     const monthInvs = invoices.filter(i => i.month === month && i.year === year)
     const newRows: ABARow[] = []
     for (const inv of monthInvs) {
       const cust = custMap.get(inv.customerId)
-      if (!cust || cust.paymentMethod !== 'direct_debit') continue
+      if (!cust || (cust.paymentMethod !== 'direct_debit' && cust.paymentMethod !== 'ezidebit')) continue
       const apt  = aptMap.get(inv.apartmentId)
       const bld  = apt ? bldMap.get(apt.buildingId) : undefined
       newRows.push({
@@ -101,7 +103,6 @@ export default function ExportsPage() {
         amountStr: inv.total.toFixed(2),
       })
     }
-    // Sort: sent first, then by customer name
     newRows.sort((a, b) => {
       if (a.invoiceStatus === 'sent' && b.invoiceStatus !== 'sent') return -1
       if (b.invoiceStatus === 'sent' && a.invoiceStatus !== 'sent') return 1
@@ -111,13 +112,64 @@ export default function ExportsPage() {
     setRowsInit(true)
   }, [invoices, custMap, aptMap, bldMap])
 
+  // ── Build rows (balance mode — one row per customer with full outstanding) ─
+  const buildBalanceRows = useCallback(() => {
+    const td = new Date().toISOString().split('T')[0]
+    const ddrCustomers = customers.filter(c => c.paymentMethod === 'direct_debit' || c.paymentMethod === 'ezidebit')
+    const newRows: ABARow[] = []
+    for (const cust of ddrCustomers) {
+      const bal = getCustomerBalance(invoices, cust.id, td)
+      if (bal.balance <= 0.005) continue
+      const apt = aptMap.get(cust.apartmentId)
+      const bld = apt ? bldMap.get(apt.buildingId) : undefined
+      // Use the oldest outstanding invoice number as reference
+      const oldestInv = invoices
+        .filter(i => i.customerId === cust.id && (i.status === 'sent' || i.status === 'overdue'))
+        .sort((a, b) => a.issueDate.localeCompare(b.issueDate))[0]
+      const invoiceRef = oldestInv?.invoiceNumber ?? `BAL-${cust.id.slice(-6).toUpperCase()}`
+      newRows.push({
+        invoiceId: oldestInv?.id ?? cust.id,
+        customerId: cust.id,
+        invoiceNumber: invoiceRef,
+        customerName: `${cust.firstName} ${cust.lastName}`,
+        bsb: cust.bsb,
+        accountNumber: cust.accountNumber,
+        accountName: cust.accountName,
+        amount: Math.round(bal.balance * 100) / 100,
+        invoiceAmount: Math.round(bal.balance * 100) / 100,
+        invoiceStatus: bal.days90plus > 0.005 ? 'overdue' : bal.days30 > 0.005 ? 'overdue' : 'sent',
+        buildingName: bld?.name ?? '',
+        unitNumber: apt?.unitNumber ?? '',
+        bankName: cust.bankName,
+        selected: true,
+        editing: false,
+        amountStr: (Math.round(bal.balance * 100) / 100).toFixed(2),
+      })
+    }
+    newRows.sort((a, b) => a.customerName.localeCompare(b.customerName))
+    setRows(newRows)
+    setRowsInit(true)
+  }, [invoices, customers, custMap, aptMap, bldMap])
+
   // Initialise on first render
-  useMemo(() => { if (isLoaded && !rowsInit) buildRows(abaMonth, abaYear) }, [isLoaded, rowsInit, buildRows, abaMonth, abaYear])
+  useMemo(() => {
+    if (isLoaded && !rowsInit) {
+      if (balanceMode) buildBalanceRows()
+      else buildRows(abaMonth, abaYear)
+    }
+  }, [isLoaded, rowsInit, buildRows, buildBalanceRows, balanceMode, abaMonth, abaYear])
 
   function handleMonthChange(month: number, year: number) {
     setAbaMonth(month); setAbaYear(year)
     buildRows(month, year)
     setSearch(''); setFilterBld('')
+  }
+
+  function handleToggleBalanceMode(val: boolean) {
+    setBalanceMode(val)
+    setSearch(''); setFilterBld('')
+    if (val) buildBalanceRows()
+    else buildRows(abaMonth, abaYear)
   }
 
   // ── Row mutations ──────────────────────────────────────────────────────────
@@ -167,12 +219,14 @@ export default function ExportsPage() {
     if (!selectedRows.length) return
     const txns = selectedRows.map<ABATransaction>(r => ({
       invoiceId: r.invoiceId, customerId: r.customerId,
-      invoiceNumber: r.invoiceNumber, customerName: r.customerName,
+      invoiceNumber: balanceMode ? `BAL-${r.customerId.slice(-6).toUpperCase()}` : r.invoiceNumber,
+      customerName: r.customerName,
       bsb: r.bsb, accountNumber: r.accountNumber, accountName: r.accountName,
       amount: r.amount,
     }))
+    const suffix = balanceMode ? `balance_${processDate.replace(/-/g,'')}` : `${abaYear}${String(abaMonth).padStart(2,'0')}_${processDate.replace(/-/g,'')}`
     const content = generateABAFileFromTransactions(txns, settings, new Date(processDate + 'T00:00:00'))
-    downloadFile(content, `electricity_ddr_${abaYear}${String(abaMonth).padStart(2,'0')}_${processDate.replace(/-/g,'')}.aba`, 'text/plain;charset=ascii')
+    downloadFile(content, `electricity_ddr_${suffix}.aba`, 'text/plain;charset=ascii')
     showToast(`ABA downloaded — ${txns.length} transactions · ${formatAUD(totalSelected)}`)
   }
 
@@ -180,12 +234,14 @@ export default function ExportsPage() {
     if (!selectedRows.length) return
     const txns = selectedRows.map<ABATransaction>(r => ({
       invoiceId: r.invoiceId, customerId: r.customerId,
-      invoiceNumber: r.invoiceNumber, customerName: r.customerName,
+      invoiceNumber: balanceMode ? `BAL-${r.customerId.slice(-6).toUpperCase()}` : r.invoiceNumber,
+      customerName: r.customerName,
       bsb: r.bsb, accountNumber: r.accountNumber, accountName: r.accountName,
       amount: r.amount,
     }))
+    const suffix = balanceMode ? `balance_${processDate.replace(/-/g,'')}` : `${abaYear}${String(abaMonth).padStart(2,'0')}_${processDate.replace(/-/g,'')}`
     const csv = generateMYOBDDRReceipts(txns, customers, new Date(processDate + 'T00:00:00'))
-    downloadFile(csv, `myob_ddr_receipts_${abaYear}${String(abaMonth).padStart(2,'0')}_${processDate.replace(/-/g,'')}.csv`, 'text/csv')
+    downloadFile(csv, `myob_ddr_receipts_${suffix}.csv`, 'text/csv')
     showToast(`MYOB DDR receipts downloaded — ${txns.length} rows`)
   }
 
@@ -300,16 +356,34 @@ export default function ExportsPage() {
         <div className="flex-1 flex flex-col overflow-hidden">
 
           {/* ABA toolbar */}
-          <div className="px-6 py-4 flex items-center gap-3 flex-shrink-0 bg-white border-b border-slate-100">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Billing Period</label>
-              <select
-                value={`${abaYear}-${abaMonth}`}
-                onChange={e => { const [y, m] = e.target.value.split('-'); handleMonthChange(+m, +y) }}
-                className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                {MONTHS.map(opt => <option key={`${opt.year}-${opt.month}`} value={`${opt.year}-${opt.month}`}>{opt.label}</option>)}
-              </select>
+          <div className="px-6 py-4 flex items-center gap-3 flex-shrink-0 bg-white border-b border-slate-100 flex-wrap">
+            {/* Mode toggle */}
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+              <button onClick={() => handleToggleBalanceMode(false)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${!balanceMode ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+                Per Invoice
+              </button>
+              <button onClick={() => handleToggleBalanceMode(true)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors border-l border-slate-200 ${balanceMode ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}>
+                Customer Balance
+              </button>
             </div>
+            {!balanceMode && (
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Billing Period</label>
+                <select
+                  value={`${abaYear}-${abaMonth}`}
+                  onChange={e => { const [y, m] = e.target.value.split('-'); handleMonthChange(+m, +y) }}
+                  className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  {MONTHS.map(opt => <option key={`${opt.year}-${opt.month}`} value={`${opt.year}-${opt.month}`}>{opt.label}</option>)}
+                </select>
+              </div>
+            )}
+            {balanceMode && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-700">
+                <Info size={12} />One debit per customer — full outstanding balance across all invoices
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">ABA Process Date</label>
               <input type="date" value={processDate} onChange={e => setProcessDate(e.target.value)}
@@ -366,9 +440,9 @@ export default function ExportsPage() {
                   <th className="table-header text-left px-3 py-3">Customer</th>
                   <th className="table-header text-left px-3 py-3">Property</th>
                   <th className="table-header text-left px-3 py-3">Bank Account</th>
-                  <th className="table-header text-left px-3 py-3">Invoice</th>
+                  <th className="table-header text-left px-3 py-3">{balanceMode ? 'Oldest Invoice' : 'Invoice'}</th>
                   <th className="table-header text-center px-3 py-3">Status</th>
-                  <th className="table-header text-right px-3 py-3">Invoice Amt</th>
+                  <th className="table-header text-right px-3 py-3">{balanceMode ? 'Total Outstanding' : 'Invoice Amt'}</th>
                   <th className="table-header text-right px-4 py-3">Debit Amount</th>
                 </tr>
               </thead>
@@ -377,7 +451,7 @@ export default function ExportsPage() {
                   <tr>
                     <td colSpan={8} className="py-16 text-center text-slate-400">
                       {rows.length === 0
-                        ? `No DDR customers have invoices for ${monthName(abaMonth, abaYear)}`
+                        ? balanceMode ? 'No DDR customers have an outstanding balance' : `No DDR customers have invoices for ${monthName(abaMonth, abaYear)}`
                         : 'No results match your filters'}
                     </td>
                   </tr>
@@ -495,8 +569,11 @@ export default function ExportsPage() {
               <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
                 <AlertCircle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-700">
-                  No DDR invoices found for {monthName(abaMonth, abaYear)}.
-                  Go to <Link href="/electricity/invoices" className="underline">Invoices</Link> to generate and send invoices first.
+                  {balanceMode
+                    ? 'No DDR customers have an outstanding balance. Invoices must be in "sent" or "overdue" status to appear here.'
+                    : <>No DDR invoices found for {monthName(abaMonth, abaYear)}.
+                      Go to <Link href="/electricity/invoices" className="underline">Invoices</Link> to generate and send invoices first.</>
+                  }
                 </p>
               </div>
             </div>
