@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
     "@fontsource/inter": "^5.2.8",
+    "@neondatabase/serverless": "^1.1.0",
     "@react-pdf/renderer": "^4.5.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",

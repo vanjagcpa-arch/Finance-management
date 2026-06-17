@@ -28,8 +28,8 @@ interface EditForm {
 
 export default function UsagePage() {
   const { readings, updateReading, upsertReadings, updateInvoice, invoices, settings, buildings, apartments, isLoaded } = useElectricity()
-  const [month, setMonth] = useState(5)
-  const [year, setYear] = useState(2026)
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1)
+  const [year,  setYear]  = useState(() => new Date().getFullYear())
   const [preview, setPreview] = useState<ParsedRow[]>([])
   const [importing, setImporting] = useState(false)
   const [imported, setImported] = useState(false)
@@ -201,8 +201,9 @@ export default function UsagePage() {
         <div className="flex items-center gap-3">
           <select value={`${year}-${month}`} onChange={e => { const [y, m] = e.target.value.split('-'); setYear(+y); setMonth(+m); setPreview([]); setImported(false); setEditingId(null) }}
             className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            {Array.from({ length: 12 }, (_, i) => {
-              const d = new Date(2026, 5 - i, 1)
+            {Array.from({ length: 24 }, (_, i) => {
+              const now = new Date()
+              const d = new Date(now.getFullYear(), now.getMonth() + 6 - i, 1)
               return { m: d.getMonth() + 1, y: d.getFullYear(), label: monthName(d.getMonth() + 1, d.getFullYear()) }
             }).map(opt => (
               <option key={`${opt.y}-${opt.m}`} value={`${opt.y}-${opt.m}`}>{opt.label}</option>
