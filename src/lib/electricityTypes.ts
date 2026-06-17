@@ -9,6 +9,10 @@ export interface Building {
   lowUsageThreshold: number   // kWh/month – below = low (green)
   highUsageThreshold: number  // kWh/month – above = high (amber)
   notes?: string
+  agencyName?: string
+  agentName?: string
+  agentEmail?: string
+  agentPhone?: string
 }
 
 export interface Apartment {

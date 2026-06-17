@@ -9,7 +9,7 @@ interface PortalData {
   customer: {
     customerId?: string
     firstName: string; lastName: string; email: string; phone: string
-    paymentMethod: 'direct_debit' | 'bpay' | 'eft'
+    paymentMethod: 'direct_debit' | 'bpay' | 'eft' | 'ezidebit'
     bsb?: string; accountNumber?: string; accountName?: string
   }
   invoice: {
@@ -19,18 +19,21 @@ interface PortalData {
     gstRate: number; status: string; isFinalBill?: boolean
     previousReading: number; currentReading: number
     billingPeriodStart: string; billingPeriodEnd: string
+    month: number; year: number
   }
   company: {
     name: string; email: string; phone: string; abn: string
     bpayBillerCode: string; bankBSB: string; bankAccount: string
     bankAccountName: string; bankName: string
     fromEmail?: string
+    address?: string; suburb?: string; state?: string; postcode?: string; website?: string
   }
   property: {
     unitNumber: string; floor: number; meterNumber: string
     buildingName: string; buildingAddress: string; suburb: string; state: string; postcode: string
+    lowUsageThreshold?: number; highUsageThreshold?: number
   }
-  usageHistory: Array<{ label: string; usage: number | null; isCurrent?: boolean; color?: string }>
+  usageHistory: Array<{ label: string; usage: number | null; isCurrent?: boolean; color?: string; month?: number; year?: number }>
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -68,87 +71,84 @@ export default function PortalPage() {
     if (!data) return
     setDownloading(true)
     try {
-      const { pdf, Document, Page, View, Text, StyleSheet, Font } = await import('@react-pdf/renderer')
-      const { createElement: h } = await import('react')
+      const { pdf } = await import('@react-pdf/renderer')
+      const { default: InvoicePDF } = await import('@/components/electricity/InvoicePDF')
 
-      // Simple styled PDF for portal (no full InvoicePDF component needed — build inline)
-      const styles = StyleSheet.create({
-        page: { fontFamily: 'Helvetica', fontSize: 9, padding: 40, backgroundColor: '#ffffff' },
-        header: { backgroundColor: '#0c1120', padding: 20, marginBottom: 0 },
-        strip: { backgroundColor: '#4f46e5', padding: '10 20', marginBottom: 16 },
-        row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-        label: { color: '#94a3b8', fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-        value: { fontFamily: 'Helvetica-Bold', color: '#1e293b', fontSize: 9 },
-        total: { backgroundColor: '#4f46e5', borderRadius: 8, padding: 16, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-      })
+      const { invoice: inv, customer, company, property, usageHistory } = data
 
-      const PDFDoc = () => h(Document, {},
-        h(Page, { size: 'A4', style: styles.page },
-          h(View, { style: styles.header },
-            h(Text, { style: { color: '#ffffff', fontSize: 14, fontFamily: 'Helvetica-Bold' } }, data.company.name),
-            h(Text, { style: { color: '#94a3b8', fontSize: 9, marginTop: 2 } }, 'Electricity Billing Services'),
-          ),
-          h(View, { style: styles.strip },
-            h(View, { style: { flexDirection: 'row', gap: 24 } },
-              h(View, {},
-                h(Text, { style: styles.label }, 'Invoice'),
-                h(Text, { style: { color: '#ffffff', fontFamily: 'Helvetica-Bold', fontSize: 9 } }, data.invoice.invoiceNumber),
-              ),
-              h(View, {},
-                h(Text, { style: styles.label }, 'Period'),
-                h(Text, { style: { color: '#ffffff', fontFamily: 'Helvetica-Bold', fontSize: 9 } }, data.invoice.period),
-              ),
-              h(View, {},
-                h(Text, { style: styles.label }, 'Due Date'),
-                h(Text, { style: { color: '#ffffff', fontFamily: 'Helvetica-Bold', fontSize: 9 } }, fdate(data.invoice.dueDate)),
-              ),
-            ),
-          ),
-          h(View, { style: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 } },
-            h(View, { style: { flex: 1, marginRight: 8 } },
-              h(Text, { style: { ...styles.label, marginBottom: 4 } }, 'Billed To'),
-              h(Text, { style: styles.value }, `${data.customer.firstName} ${data.customer.lastName}`),
-              h(Text, { style: { color: '#64748b', fontSize: 8, marginTop: 2 } }, data.customer.email),
-            ),
-            h(View, { style: { flex: 1 } },
-              h(Text, { style: { ...styles.label, marginBottom: 4 } }, 'Property'),
-              h(Text, { style: styles.value }, `${data.property.buildingName} — Unit ${data.property.unitNumber}`),
-              h(Text, { style: { color: '#64748b', fontSize: 8, marginTop: 2 } }, `${data.property.buildingAddress}, ${data.property.suburb} ${data.property.state}`),
-              h(Text, { style: { color: '#94a3b8', fontSize: 7, marginTop: 1 } }, `Meter: ${data.property.meterNumber}`),
-            ),
-          ),
-          h(View, { style: styles.total },
-            h(View, {},
-              h(Text, { style: { color: '#a5b4fc', fontSize: 8 } }, data.invoice.isFinalBill ? 'Final Amount Due' : 'Total Amount Due'),
-              h(Text, { style: { color: '#a5b4fc', fontSize: 7, marginTop: 2 } }, 'Including GST · AUD'),
-            ),
-            h(Text, { style: { color: '#ffffff', fontSize: 22, fontFamily: 'Helvetica-Bold' } }, aud(data.invoice.total)),
-          ),
-          // Charges table
-          h(Text, { style: { ...styles.label, marginBottom: 6 } }, 'Charges Summary'),
-          ...[
-            [`Electricity usage (${data.invoice.usage.toLocaleString()} kWh × ${(data.invoice.ratePerKwh*100).toFixed(2)}¢/kWh)`, aud(data.invoice.usageCharge)],
-            [`Daily supply charge (${data.invoice.daysInPeriod} days)`, aud(data.invoice.supplyCharge)],
-            ['Subtotal (excl. GST)', aud(data.invoice.subtotal)],
-            [`GST (${(data.invoice.gstRate*100).toFixed(0)}%)`, aud(data.invoice.gst)],
-          ].map(([label, val]) =>
-            h(View, { style: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottom: '1 solid #f1f5f9' } },
-              h(Text, { style: { color: '#334155', fontSize: 8 } }, label),
-              h(Text, { style: { color: '#1e293b', fontFamily: 'Helvetica-Bold', fontSize: 8 } }, val),
-            )
-          ),
-          // Footer
-          h(View, { style: { position: 'absolute', bottom: 20, left: 40, right: 40, borderTop: '1 solid #e2e8f0', paddingTop: 8 } },
-            h(Text, { style: { color: '#94a3b8', fontSize: 7 } }, `${data.company.name} · ABN ${data.company.abn} · ${data.company.email} · ${data.company.phone}`),
-            h(Text, { style: { color: '#cbd5e1', fontSize: 6, fontFamily: 'Courier', marginTop: 2 } }, data.invoice.invoiceNumber),
-          ),
-        )
-      )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const invoiceObj: any = {
+        id: inv.invoiceNumber, invoiceNumber: inv.invoiceNumber,
+        customerId: '', apartmentId: '', buildingId: '',
+        month: inv.month, year: inv.year,
+        issueDate: inv.issueDate, dueDate: inv.dueDate,
+        billingPeriodStart: inv.billingPeriodStart, billingPeriodEnd: inv.billingPeriodEnd,
+        daysInPeriod: inv.daysInPeriod,
+        previousReading: inv.previousReading, currentReading: inv.currentReading,
+        usage: inv.usage, ratePerKwh: inv.ratePerKwh,
+        usageCharge: inv.usageCharge, supplyCharge: inv.supplyCharge,
+        subtotal: inv.subtotal, gst: inv.gst, total: inv.total,
+        status: inv.status, isFinalBill: inv.isFinalBill,
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const customerObj: any = {
+        id: customer.customerId ?? '', apartmentId: '',
+        firstName: customer.firstName, lastName: customer.lastName,
+        email: customer.email, phone: customer.phone,
+        moveInDate: '', bankName: '',
+        bsb: customer.bsb ?? '', accountNumber: customer.accountNumber ?? '',
+        accountName: customer.accountName ?? '',
+        myobCardId: '', paymentMethod: customer.paymentMethod,
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const aptObj: any = {
+        id: '', buildingId: '',
+        unitNumber: property.unitNumber, floor: property.floor, meterNumber: property.meterNumber,
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const buildingObj: any = {
+        id: '', name: property.buildingName, address: property.buildingAddress,
+        suburb: property.suburb, state: property.state, postcode: property.postcode,
+        totalUnits: 0,
+        lowUsageThreshold: property.lowUsageThreshold ?? 180,
+        highUsageThreshold: property.highUsageThreshold ?? 380,
+      }
+      const dailyRate = inv.daysInPeriod > 0 ? inv.supplyCharge / inv.daysInPeriod : 0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const settingsObj: any = {
+        companyName: company.name, abn: company.abn,
+        address: company.address ?? '', suburb: company.suburb ?? '',
+        state: company.state ?? '', postcode: company.postcode ?? '',
+        phone: company.phone, email: company.email, website: company.website ?? '',
+        bankName: company.bankName, bsb: company.bankBSB, accountNumber: company.bankAccount,
+        accountName: company.bankAccountName, bpayBillerCode: company.bpayBillerCode,
+        tariff: { ratePerKwh: inv.ratePerKwh, dailySupplyCharge: dailyRate, gstRate: inv.gstRate },
+        apcsUserId: '', institutionCode: '', invoicePrefix: '', paymentTermsDays: 21,
+        senderEmail: '', myobClientId: '', myobClientSecret: '', myobAccessToken: '',
+        myobRefreshToken: '', myobTokenExpiry: '', myobCompanyFileUrl: '',
+        myobCompanyFileName: '', myobIncomeAccountCode: '', myobLastSyncCustomers: '',
+        myobLastSyncInvoices: '', ezidebitDigitalKey: '',
+      }
 
-      const blob = await pdf(h(PDFDoc, {})).toBlob()
+      const historyItems = usageHistory.map(h => ({
+        month: h.month ?? 1, year: h.year ?? 2025,
+        usage: h.usage, label: h.label,
+      }))
+
+      const blob = await pdf(
+        <InvoicePDF
+          invoice={invoiceObj}
+          customer={customerObj}
+          apt={aptObj}
+          building={buildingObj}
+          settings={settingsObj}
+          usageHistory={historyItems}
+        />
+      ).toBlob()
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url; a.download = `${data.invoice.invoiceNumber}.pdf`
+      a.href = url; a.download = `${inv.invoiceNumber}.pdf`
       document.body.appendChild(a); a.click()
       document.body.removeChild(a); URL.revokeObjectURL(url)
     } catch (e) {
@@ -177,7 +177,7 @@ export default function PortalPage() {
     return filled.length ? Math.round(filled.reduce((s, h) => s + (h.usage ?? 0), 0) / filled.length) : 0
   }, [usageHistory])
 
-  const isDDR = customer.paymentMethod === 'direct_debit'
+  const isDDR = customer.paymentMethod === 'direct_debit' || customer.paymentMethod === 'ezidebit'
   const bpayRef = inv.invoiceNumber.replace(/-/g, '')
 
   async function handleDisconnectRequest() {
@@ -359,7 +359,9 @@ export default function PortalPage() {
               <div>
                 <p className="font-semibold text-indigo-900 text-sm">Direct Debit Scheduled</p>
                 <p className="text-indigo-700 text-sm mt-0.5">{aud(inv.total)} will be automatically debited on <strong>{fdate(inv.dueDate)}</strong></p>
-                <p className="text-indigo-500 text-xs mt-1">From: {customer.accountName} · BSB {customer.bsb} · Account {customer.accountNumber}</p>
+                {customer.paymentMethod === 'direct_debit' && customer.bsb && (
+                  <p className="text-indigo-500 text-xs mt-1">From: {customer.accountName} · BSB {customer.bsb} · Account {customer.accountNumber}</p>
+                )}
                 <p className="text-indigo-400 text-xs mt-1">No action required — we handle this automatically.</p>
               </div>
             </div>
