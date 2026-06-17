@@ -19,6 +19,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Settings }> = [
 const EMPTY_BUILDING: Omit<Building, 'id'> = {
   name: '', address: '', suburb: '', state: 'VIC', postcode: '',
   totalUnits: 80, lowUsageThreshold: 180, highUsageThreshold: 380, notes: '',
+  agencyName: '', agentName: '', agentEmail: '', agentPhone: '',
 }
 
 interface MYOBFile { Id: string; Name: string; Uri: string }
@@ -95,7 +96,8 @@ export default function SettingsPage() {
   function openEditBuilding(b: Building) {
     setEditBld(b)
     setBldForm({ name: b.name, address: b.address, suburb: b.suburb, state: b.state, postcode: b.postcode,
-      totalUnits: b.totalUnits, lowUsageThreshold: b.lowUsageThreshold, highUsageThreshold: b.highUsageThreshold, notes: b.notes })
+      totalUnits: b.totalUnits, lowUsageThreshold: b.lowUsageThreshold, highUsageThreshold: b.highUsageThreshold, notes: b.notes,
+      agencyName: b.agencyName ?? '', agentName: b.agentName ?? '', agentEmail: b.agentEmail ?? '', agentPhone: b.agentPhone ?? '' })
     setBldModal(true)
   }
 
@@ -828,6 +830,15 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div>{bldField('notes', 'Notes (optional)')}</div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Managing Agent</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {bldField('agencyName' as keyof typeof bldForm, 'Agency Name')}
+                  {bldField('agentName' as keyof typeof bldForm, 'Agent Name')}
+                  {bldField('agentEmail' as keyof typeof bldForm, 'Agent Email')}
+                  {bldField('agentPhone' as keyof typeof bldForm, 'Agent Phone')}
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
               <button onClick={() => setBldModal(false)} className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-white">Cancel</button>
