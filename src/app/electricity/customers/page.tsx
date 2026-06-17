@@ -528,7 +528,28 @@ export default function CustomersPage() {
                     </select>
                   </div>
                   {field('bankName','Bank Name')}
-                  {field('bsb','BSB (nnn-nnn)')}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">BSB (nnn-nnn)</label>
+                    <input
+                      type="text"
+                      value={form.bsb}
+                      maxLength={7}
+                      onChange={e => {
+                        let v = e.target.value.replace(/[^\d-]/g, '')
+                        if (!v.includes('-') && v.replace(/-/g,'').length > 3)
+                          v = v.slice(0,3) + '-' + v.slice(3,6)
+                        setForm(f => ({ ...f, bsb: v.slice(0,7) }))
+                      }}
+                      className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                        form.bsb && !/^\d{3}-\d{3}$/.test(form.bsb) ? 'border-red-300 bg-red-50' : 'border-slate-200'
+                      }`}
+                    />
+                    {form.bsb && !/^\d{3}-\d{3}$/.test(form.bsb) && (
+                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                        <AlertCircle size={11} />Format: NNN-NNN (e.g. 062-000)
+                      </p>
+                    )}
+                  </div>
                   {field('accountNumber','Account Number')}
                   {field('accountName','Account Name')}
                   {field('myobCardId','MYOB Card ID')}

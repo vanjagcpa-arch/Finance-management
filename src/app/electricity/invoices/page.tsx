@@ -1,9 +1,9 @@
 'use client'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
   FileText, Send, RefreshCw, Check, AlertTriangle, PlusCircle, Minus,
-  TrendingUp, TrendingDown, ZapOff, ChevronDown, ChevronUp, X, Zap,
+  TrendingUp, TrendingDown, ZapOff, ChevronDown, ChevronUp, X, Zap, Clock,
 } from 'lucide-react'
 import { useElectricity } from '@/lib/ElectricityContext'
 import { formatAUD, monthName, detectUsageAnomalies } from '@/lib/electricityUtils'
@@ -34,6 +34,20 @@ export default function InvoicesPage() {
   const [toast, setToast] = useState('')
   const [anomalyOpen, setAnomalyOpen] = useState(true)
   const [showReadinessPanel, setShowReadinessPanel] = useState(true)
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false)
+  const overdueSweptRef = useRef(false)
+
+  // Auto-sweep: mark sent invoices past their due date as overdue (runs once after load)
+  useEffect(() => {
+    if (!isLoaded || overdueSweptRef.current) return
+    overdueSweptRef.current = true
+    const td = new Date().toISOString().split('T')[0]
+    const toMark = invoices.filter(i => i.status === 'sent' && i.dueDate < td)
+    if (!toMark.length) return
+    upsertInvoices(toMark.map(i => ({ ...i, status: 'overdue' as const })))
+    showToast(`${toMark.length} invoice${toMark.length !== 1 ? 's' : ''} marked overdue`)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded])
 
   const aptMap  = useMemo(() => new Map(apartments.map(a => [a.id, a])), [apartments])
   const custMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
@@ -455,6 +469,7 @@ export default function InvoicesPage() {
           <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2.5 flex-1">
             <span className="text-sm text-indigo-800">
               <strong>{draftInvoices.length}</strong> draft invoice{draftInvoices.length !== 1 ? 's' : ''} ready to send
+              {' · '}<span className="font-semibold">{formatAUD(draftInvoices.reduce((s, i) => s + i.total, 0))}</span>
             </span>
             {sendProgress && (
               <div className="flex-1 mx-2">
@@ -465,7 +480,7 @@ export default function InvoicesPage() {
                 <p className="text-xs text-indigo-600 mt-1">{sendProgress.done}/{sendProgress.total} sent</p>
               </div>
             )}
-            <button onClick={() => runBatchSend(draftInvoices)} disabled={sendingBatch}
+            <button onClick={() => setSendConfirmOpen(true)} disabled={sendingBatch}
               className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors ml-auto">
               <Send size={13} className={sendingBatch ? 'animate-pulse' : ''} />
               Send All Drafts ({draftInvoices.length})
@@ -620,6 +635,67 @@ export default function InvoicesPage() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Batch Send Confirmation Modal ── */}
+      {sendConfirmOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Send size={17} className="text-indigo-600" />Confirm Batch Send
+              </h2>
+              <button onClick={() => setSendConfirmOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded hover:bg-slate-100"><X size={15} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-indigo-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-indigo-500 font-medium uppercase tracking-wider mb-1">Invoices</p>
+                  <p className="text-2xl font-bold text-indigo-700">{draftInvoices.length}</p>
+                </div>
+                <div className="bg-indigo-50 rounded-xl p-4 text-center">
+                  <p className="text-xs text-indigo-500 font-medium uppercase tracking-wider mb-1">Total Amount</p>
+                  <p className="text-2xl font-bold text-indigo-700">{formatAUD(draftInvoices.reduce((s, i) => s + i.total, 0))}</p>
+                </div>
+              </div>
+              <div className="max-h-52 overflow-y-auto rounded-xl border border-slate-200">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="text-left px-3 py-2 text-slate-500 font-semibold">Customer</th>
+                      <th className="text-left px-3 py-2 text-slate-500 font-semibold">Invoice</th>
+                      <th className="text-right px-3 py-2 text-slate-500 font-semibold">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draftInvoices.map(inv => {
+                      const cust = custMap.get(inv.customerId)
+                      return (
+                        <tr key={inv.id} className="border-b border-slate-100 last:border-0">
+                          <td className="px-3 py-2 text-slate-700">{cust ? `${cust.firstName} ${cust.lastName}` : '—'}</td>
+                          <td className="px-3 py-2 font-mono text-indigo-600">{inv.invoiceNumber}</td>
+                          <td className="px-3 py-2 text-right font-mono font-semibold text-slate-800">{formatAUD(inv.total)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-slate-500">
+                Each invoice will be emailed to the customer with a PDF attachment. Invoice status will update to <strong>Sent</strong>.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
+              <button onClick={() => setSendConfirmOpen(false)}
+                className="px-4 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-white">Cancel</button>
+              <button
+                onClick={() => { setSendConfirmOpen(false); runBatchSend(draftInvoices) }}
+                className="flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700">
+                <Send size={14} />Send {draftInvoices.length} Invoice{draftInvoices.length !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -68,6 +68,20 @@ export default function ExportsPage() {
   const [eziStatuses, setEziStatuses] = useState<string[]>(['sent', 'overdue'])
 
   const [toast, setToast] = useState('')
+  const [exportHistory, setExportHistory] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined') return {}
+    try { return JSON.parse(localStorage.getItem('elec_export_history') ?? '{}') } catch { return {} }
+  })
+
+  function recordExport(key: string) {
+    const h = { ...exportHistory, [key]: new Date().toISOString() }
+    setExportHistory(h)
+    if (typeof window !== 'undefined') localStorage.setItem('elec_export_history', JSON.stringify(h))
+  }
+
+  function fmtExportTime(iso: string) {
+    return new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  }
 
   const aptMap  = useMemo(() => new Map(apartments.map(a => [a.id, a])), [apartments])
   const custMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers])
@@ -227,6 +241,7 @@ export default function ExportsPage() {
     const suffix = balanceMode ? `balance_${processDate.replace(/-/g,'')}` : `${abaYear}${String(abaMonth).padStart(2,'0')}_${processDate.replace(/-/g,'')}`
     const content = generateABAFileFromTransactions(txns, settings, new Date(processDate + 'T00:00:00'))
     downloadFile(content, `electricity_ddr_${suffix}.aba`, 'text/plain;charset=ascii')
+    recordExport('aba')
     showToast(`ABA downloaded — ${txns.length} transactions · ${formatAUD(totalSelected)}`)
   }
 
@@ -242,6 +257,7 @@ export default function ExportsPage() {
     const suffix = balanceMode ? `balance_${processDate.replace(/-/g,'')}` : `${abaYear}${String(abaMonth).padStart(2,'0')}_${processDate.replace(/-/g,'')}`
     const csv = generateMYOBDDRReceipts(txns, customers, new Date(processDate + 'T00:00:00'))
     downloadFile(csv, `myob_ddr_receipts_${suffix}.csv`, 'text/csv')
+    recordExport('aba_myob')
     showToast(`MYOB DDR receipts downloaded — ${txns.length} rows`)
   }
 
@@ -267,15 +283,18 @@ export default function ExportsPage() {
 
   function handleMYOBCustomers() {
     downloadFile(generateMYOBCustomerExport(customers, apartments, buildings), `myob_customers_${Date.now()}.csv`, 'text/csv')
+    recordExport('myob_customers')
     showToast(`MYOB customers exported — ${customers.length} records`)
   }
   function handleMYOBInvoices() {
     downloadFile(generateMYOBInvoiceExport(myobMonthInvoices, customers, apartments, buildings), `myob_invoices_${myobYear}${String(myobMonth).padStart(2,'0')}.csv`, 'text/csv')
+    recordExport('myob_invoices')
     showToast(`MYOB invoices exported — ${myobMonthInvoices.length} records`)
   }
   function handleMYOBReceipts() {
     const paid = myobMonthInvoices.filter(i => i.status === 'paid')
     downloadFile(generateMYOBReceiptsExport(myobMonthInvoices, customers), `myob_receipts_${myobYear}${String(myobMonth).padStart(2,'0')}.csv`, 'text/csv')
+    recordExport('myob_receipts')
     showToast(`MYOB receipts exported — ${paid.length} records`)
   }
 
@@ -298,6 +317,7 @@ export default function ExportsPage() {
     if (!eziEligibleInvoices.length) return
     const csv = generateEzidebitPaymentBatch(eziMonthInvoices, customers, eziProcessDate, eziStatuses)
     downloadFile(csv, `ezidebit_payments_${eziYear}${String(eziMonth).padStart(2,'0')}_${eziProcessDate.replace(/-/g,'')}.csv`, 'text/csv')
+    recordExport('ezi_batch')
     showToast(`Ezidebit payment batch exported — ${eziEligibleInvoices.length} transactions`)
   }
 
@@ -305,6 +325,7 @@ export default function ExportsPage() {
     const ddrCustomers = customers.filter(c => c.paymentMethod === 'direct_debit' && !c.moveOutDate)
     const csv = generateEzidebitCustomerRegistration(customers, apartments, buildings)
     downloadFile(csv, `ezidebit_customers_${todayStr()}.csv`, 'text/csv')
+    recordExport('ezi_reg')
     showToast(`Ezidebit customer registration exported — ${ddrCustomers.length} customers`)
   }
 
@@ -539,6 +560,9 @@ export default function ExportsPage() {
               <span className="font-semibold text-slate-700">{selectedRows.length}</span> customers selected ·
               <span className="font-semibold text-indigo-700 ml-1">{formatAUD(totalSelected)}</span> to debit ·
               Process date: <span className="font-semibold text-slate-700">{processDate}</span>
+              {exportHistory['aba'] && (
+                <span className="ml-3 text-slate-400">· Last ABA: {fmtExportTime(exportHistory['aba'])}</span>
+              )}
             </div>
 
             <div className="ml-auto flex items-center gap-2">
@@ -630,6 +654,7 @@ export default function ExportsPage() {
                   icon: Users,
                   color: 'bg-indigo-50 text-indigo-600',
                   action: handleMYOBCustomers,
+                  historyKey: 'myob_customers',
                 },
                 {
                   label: 'Sales Invoices',
@@ -638,6 +663,7 @@ export default function ExportsPage() {
                   icon: FileText,
                   color: 'bg-purple-50 text-purple-600',
                   action: handleMYOBInvoices,
+                  historyKey: 'myob_invoices',
                 },
                 {
                   label: 'Receipts (Paid invoices)',
@@ -646,6 +672,7 @@ export default function ExportsPage() {
                   icon: CreditCard,
                   color: 'bg-emerald-50 text-emerald-600',
                   action: handleMYOBReceipts,
+                  historyKey: 'myob_receipts',
                 },
               ].map(item => (
                 <button key={item.label} onClick={item.action}
@@ -657,6 +684,9 @@ export default function ExportsPage() {
                     <p className="font-semibold text-slate-800 text-sm">{item.label}</p>
                     <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{item.note}</p>
+                    {exportHistory[item.historyKey] && (
+                      <p className="text-xs text-emerald-600 mt-1">Last exported: {fmtExportTime(exportHistory[item.historyKey])}</p>
+                    )}
                   </div>
                   <Download size={15} className="text-slate-300 group-hover:text-indigo-500 flex-shrink-0" />
                 </button>
@@ -852,11 +882,16 @@ export default function ExportsPage() {
                     </tfoot>
                   </table>
                 </div>
-                <button onClick={handleEziPaymentBatch}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors">
-                  <Download size={15} />Download Payment Batch CSV
-                  <span className="bg-emerald-500 text-white text-xs px-1.5 py-0.5 rounded-full">{eziEligibleInvoices.length}</span>
-                </button>
+                <div>
+                  <button onClick={handleEziPaymentBatch}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors">
+                    <Download size={15} />Download Payment Batch CSV
+                    <span className="bg-emerald-500 text-white text-xs px-1.5 py-0.5 rounded-full">{eziEligibleInvoices.length}</span>
+                  </button>
+                  {exportHistory['ezi_batch'] && (
+                    <p className="text-xs text-slate-400 mt-1.5">Last exported: {fmtExportTime(exportHistory['ezi_batch'])}</p>
+                  )}
+                </div>
               </>
             ) : (
               <div className="flex items-center gap-2 p-4 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-500">
